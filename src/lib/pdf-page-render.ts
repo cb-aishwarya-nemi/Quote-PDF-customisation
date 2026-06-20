@@ -3,7 +3,7 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url"
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
-function readFileAsDataUrl(file: File): Promise<string> {
+export async function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result ?? ""))

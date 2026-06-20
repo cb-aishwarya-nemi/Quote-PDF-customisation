@@ -1,0 +1,368 @@
+# Quote template builder — Cursor handoff
+
+## Stack
+- Vite + React + TypeScript
+- `dnd-kit` for canvas drag-and-drop
+- `react-pdf` for preview rendering
+- Zustand for global state (template, selected block, modal state)
+- Tailwind CSS for styling
+
+---
+
+## Data types
+
+```ts
+type BlockType =
+  | 'header'
+  | 'logo'
+  | 'company_details'
+  | 'billed_to'
+  | 'quote_details'
+  | 'pricing'
+  | 'tcv_billing'
+  | 'entitlements'
+  | 'credits_tax'
+  | 'terms'
+
+type Block = {
+  id: string
+  type: BlockType
+  order: number
+  layout: {
+    topPadding: number
+    showBorder: boolean
+  }
+  content: Record<string, unknown> // varies per block type
+}
+
+type TermsBlock = Block & {
+  type: 'terms'
+  content: {
+    text: string         // raw legal text
+    spans: Span[]        // named regions within the text
+    rules: Rule[]        // conditional rules referencing span ids
+  }
+}
+
+type Span = {
+  id: string
+  name: string           // e.g. "prepaid-clause"
+  start: number          // character offset in text
+  end: number            // character offset in text
+}
+
+type Rule = {
+  id: string
+  spanId: string         // references Span.id
+  condition: Condition
+}
+
+type Condition = {
+  field: string          // e.g. "payment_terms", "customer.region"
+  operator: 'is' | 'is_not' | 'gt' | 'lt' | 'contains'
+  value: string
+}
+
+type Template = {
+  id: string
+  name: string
+  status: 'draft' | 'published' | 'archived'
+  blocks: Block[]
+  routingRules: TemplateRoutingRule[]
+  createdAt: string
+  updatedAt: string
+}
+
+type TemplateRoutingRule = {
+  id: string
+  priority: number       // lower = evaluated first
+  condition: Condition
+  templateId: string
+}
+
+type TestScenario = {
+  label: string
+  values: Record<string, string>  // e.g. { payment_terms: 'Prepaid', customer_region: 'EU' }
+}
+```
+
+---
+
+## Global state (Zustand)
+
+```ts
+type Store = {
+  // Template being edited
+  template: Template | null
+  setTemplate: (t: Template) => void
+
+  // Canvas
+  selectedBlockId: string | null
+  setSelectedBlockId: (id: string | null) => void
+  reorderBlocks: (from: number, to: number) => void
+
+  // Modals
+  tcRuleBuilderOpen: boolean
+  openTCRuleBuilder: () => void
+  closeTCRuleBuilder: () => void
+
+  previewOpen: boolean
+  openPreview: () => void
+  closePreview: () => void
+  activeScenario: TestScenario | null
+  setActiveScenario: (s: TestScenario) => void
+}
+```
+
+---
+
+## Component tree
+
+```
+<App>
+  <TemplatesLibrary>           // default route: /templates
+    <TemplateCard />           // per template: name, status badge, last edited
+    <NewTemplateButton />      // triggers new template flow
+
+  <NewTemplateFlow>            // route: /templates/new
+    step: 'upload' | 'processing' | 'picker'
+
+    [step === 'upload']
+      <UploadZone
+        onFilesAdded={(files: File[]) => void}
+      />
+      <FileList
+        files: File[]
+        onRemove={(file: File) => void}
+      />
+      <GenerateButton
+        disabled={files.length === 0}
+        onClick={() => startGeneration(files)}
+      />
+      <StartBlankButton />
+
+    [step === 'processing']
+      <ProcessingSteps
+        steps: ProcessingStep[]   // label + status: 'done' | 'active' | 'idle'
+      />
+
+    [step === 'picker']
+      <VariantGrid>
+        <VariantCard
+          variant: GeneratedVariant    // name, sourceNote, tags, blockStack
+          selected: boolean
+          onClick: () => void
+        />
+      </VariantGrid>
+      <RegenerateLink />
+      <OpenInCanvasButton
+        disabled={!selectedVariant}
+        onClick={() => navigate(`/templates/${newId}/edit`)}
+      />
+
+  <CanvasEditor>               // route: /templates/:id/edit
+    <TopBar>
+      <Breadcrumb />
+      <PreviewButton onClick={openPreview} />
+      <SaveDraftButton />
+      <PublishButton />
+
+    <EditorBody>               // flex row: tray | canvas | sidebar
+      <BlockTray>
+        <TrayBlock
+          type: BlockType
+          active: boolean      // true if this type is already on canvas
+          onDragStart: () => void
+        />
+
+      <Canvas>                 // dnd-kit drop target
+        <SortableBlock
+          block: Block
+          selected: boolean
+          onClick: () => setSelectedBlockId(block.id)
+          // shows block label + content preview
+          // T&C block shows rule count badge
+          // drag handle on hover
+        />
+        <CanvasEmptyState />   // shown when no blocks added yet
+
+      <PropertiesPanel>        // conditional on selectedBlockId
+        [no selection]
+          <TemplateLevelSettings />   // template name, page margins
+
+        [block selected, type !== 'terms']
+          <BlockHeader
+            title: string      // e.g. "Pricing block"
+            onClose: () => setSelectedBlockId(null)
+          />
+          <LayoutSection>
+            // order, top padding, show border
+          <ContentSection>
+            // fields vary per BlockType (see per-block props below)
+
+        [block selected, type === 'terms']
+          <BlockHeader title="T&C block" />
+          <LayoutSection />
+          <OpenRuleBuilderButton onClick={openTCRuleBuilder} />
+          // shows span count + rule count summary
+
+  <TCRuleBuilder>              // full-screen modal, rendered inside CanvasEditor
+    open: boolean
+    onClose: closeTCRuleBuilder
+
+    <TCTopBar>
+      <BackButton onClick={closeTCRuleBuilder} />
+      <SaveAndCloseButton />
+
+    <TCBody>                   // flex row: editor | rules panel
+      <TermsEditor>
+        text: string
+        spans: Span[]
+        onTextChange: (text: string) => void
+        onSpanCreate: (start: number, end: number) => void
+        // renders colored underlines for each span
+        // selection toolbar appears on highlight: "Mark as span"
+        <SelectionHint />      // "Highlight text, then click Add rule"
+
+      <RulesPanel>
+        <RulesPanelHeader>
+          <RuleCount />
+          <AddRuleButton />    // adds a new empty rule card
+
+        <RuleList>
+          <RuleCard
+            rule: Rule
+            span: Span         // resolved from rule.spanId
+            onConditionChange: (field, op, value) => void
+            onSpanChange: (spanId: string) => void
+            onDelete: () => void
+          />
+
+        <RuleSimulator>
+          scenarios: TestScenario[]
+          activeScenario: TestScenario
+          onScenarioChange: (s: TestScenario) => void
+          resolvedSpans: string[]   // span ids that are visible for active scenario
+
+  <PreviewMode>                // full-screen mode, toggled via openPreview
+    open: boolean
+    onClose: closePreview
+
+    <PreviewTopBar>
+      <ExitButton onClick={closePreview} />
+      <ScenarioPicker
+        scenarios: TestScenario[]
+        active: TestScenario
+        onChange: setActiveScenario
+      />
+      <ExportPDFButton />
+
+    <PreviewBody>              // flex row: pdf view | annotations panel
+      <PDFView
+        template: Template
+        scenario: TestScenario
+        // renders blocks in order
+        // T&C text: only shows spans whose rules pass for active scenario
+      />
+      <AnnotationsPanel>
+        <ActiveRuleList
+          rules: Rule[]
+          spans: Span[]
+          resolvedSpans: string[]   // which span ids are on for this scenario
+        />
+        <ScenarioValues
+          scenario: TestScenario
+        />
+```
+
+---
+
+## Per-block content props
+
+```ts
+// header
+{ showQuoteNumber: boolean; showDate: boolean; showValidUntil: boolean }
+
+// logo
+{ alignment: 'left' | 'center' | 'right'; maxHeight: number }
+
+// company_details
+{ fields: ('name' | 'address' | 'tax_id' | 'entity')[]; }
+
+// billed_to
+{ fields: ('name' | 'address' | 'contact' | 'region')[]; }
+
+// quote_details
+{ showQuoteId: boolean; showSalesperson: boolean; showExpiryDate: boolean }
+
+// pricing
+{
+  labelOverride: string
+  showSubtotal: boolean
+  showDiscounts: boolean
+  showLineItemDescription: boolean
+  lineItemStyle: 'table' | 'list'
+}
+
+// tcv_billing
+{
+  showTCV: boolean
+  showACV: boolean
+  showBillingCycle: boolean
+  tcvPlacement: 'top' | 'bottom'    // 'bottom' avoids the "scary box" problem
+}
+
+// entitlements
+{ labelOverride: string; style: 'table' | 'list' }
+
+// credits_tax
+{ showCredits: boolean; showTax: boolean; showNetTotal: boolean }
+
+// terms — see TermsBlock above
+```
+
+---
+
+## Key interaction notes for Cursor
+
+**Block drag and drop**
+Use `dnd-kit`'s `SortableContext` with `verticalListSortingStrategy`. Each `SortableBlock` gets a drag handle (visible on hover). On drop, call `reorderBlocks(from, to)` which updates `block.order` for all blocks.
+
+**Span creation in TermsEditor**
+On mouseup inside the editor, check `window.getSelection()`. If selection is non-empty and within the editor bounds, show a small toolbar above the selection: "Mark as span →". On click, calculate character offsets relative to the text string, create a new `Span` with a default name ("Span N"), add it to `spans`, and immediately create a placeholder `Rule` in the rules panel referencing the new span id.
+
+**Rule evaluation (for simulator and preview)**
+```ts
+function evaluateRule(rule: Rule, scenario: TestScenario): boolean {
+  const val = scenario.values[rule.condition.field]
+  if (!val) return false
+  switch (rule.condition.operator) {
+    case 'is': return val === rule.condition.value
+    case 'is_not': return val !== rule.condition.value
+    case 'gt': return Number(val) > Number(rule.condition.value)
+    case 'lt': return Number(val) < Number(rule.condition.value)
+    case 'contains': return val.includes(rule.condition.value)
+  }
+}
+
+function resolveVisibleSpans(rules: Rule[], scenario: TestScenario): string[] {
+  return rules.filter(r => evaluateRule(r, scenario)).map(r => r.spanId)
+}
+```
+
+**TCV placement**
+The `tcv_billing` block has a `tcvPlacement` prop (`'top' | 'bottom'`). Default to `'bottom'` — this directly addresses the "scary box" problem from the PM doc where TCV at the top triggers procurement thresholds prematurely.
+
+**Template routing rule evaluation**
+Rules are priority-ordered (ascending). Evaluate top to bottom, first match wins. Always ensure a default template exists (priority: 999, no condition) as the fallback. Warn in the UI if no default is set.
+
+---
+
+## Suggested build order
+
+1. `NewTemplateFlow` — upload → processing → picker (simplest state machine, no persistence needed yet)
+2. `CanvasEditor` shell — topbar, tray, canvas with drag-and-drop, empty state
+3. `PropertiesPanel` — sidebar that responds to block selection
+4. `TCRuleBuilder` — full-screen modal with text editor and rules panel
+5. `PreviewMode` — read-only render with scenario picker and annotations panel
+6. `TemplatesLibrary` — list view, status badges, routing rules management

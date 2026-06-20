@@ -1,3 +1,4 @@
+import { EntitlementsBlockView } from "@/components/prompt-builder/variants/EntitlementsBlockView"
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
 import { CustomTableBlockView } from "@/components/prompt-builder/variants/CustomTableBlockView"
 import { ImageBlockEditor } from "@/components/prompt-builder/ImageBlockEditor"
@@ -61,6 +62,9 @@ export function BuilderBlockView({ block }: Props) {
     case "pricing":
       return <PricingTableView block={block} onField={onField} />
 
+    case "entitlements":
+      return <EntitlementsBlockView block={block} onField={onField} />
+
     case "terms":
       return (
         <TermsBlockView
@@ -88,6 +92,7 @@ export function BuilderBlockView({ block }: Props) {
           caption={
             variant === "framed" ? (
               <InlineEditable
+                blockId={block.id}
                 value={String(c.caption ?? c.alt ?? "Figure caption")}
                 onChange={(v) => onField("caption", v)}
                 className="block text-center text-[10px] italic text-gray-500"

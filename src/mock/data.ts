@@ -117,11 +117,54 @@ export const predefinedTemplates: PredefinedTemplate[] = [
 
 export const mockProcessingSteps: ProcessingStep[] = [
   { label: "Reading uploaded documents", status: "done" },
-  { label: "Identifying common block patterns", status: "done" },
-  { label: "Extracting pricing structures", status: "active" },
-  { label: "Detecting T&C and legal patterns", status: "idle" },
+  { label: "Extracting brand guidelines and assets", status: "done" },
+  { label: "Identifying layout and pricing patterns", status: "active" },
+  { label: "Matching to your business profile", status: "idle" },
   { label: "Assembling template variants", status: "idle" },
 ]
+
+export const profileMatchProcessingSteps: ProcessingStep[] = [
+  { label: "Analyzing your business profile", status: "done" },
+  { label: "Matching industry and deal patterns", status: "done" },
+  { label: "Applying brand and stationery best practices", status: "active" },
+  { label: "Generating your best-fit template", status: "idle" },
+]
+
+export type BestMatchTemplate = GeneratedVariant & {
+  presetId: string
+  matchSummary: string
+  matchReasons: string[]
+}
+
+export const mockBestMatchTemplate: BestMatchTemplate = {
+  id: "best-match",
+  presetId: "preset-header-led",
+  name: "Header-led layout",
+  sourceNote: "Best match for brand-forward enterprise quotes",
+  tags: ["Brand-first", "Enterprise B2B", "Multi-region ready"],
+  matchSummary:
+    "Matched to your company profile — enterprise sales, brand-forward stationery, and Net-30 deal patterns.",
+  matchReasons: [
+    "Logo and letterhead placement up top",
+    "Pricing mid-page with TCV summary",
+    "Conditional terms for US, EU, and APAC",
+  ],
+}
+
+export type BusinessProfileSnapshot = {
+  companyName: string
+  attributes: Array<{ label: string; value: string }>
+}
+
+export const mockBusinessProfile: BusinessProfileSnapshot = {
+  companyName: "Acme Software Inc.",
+  attributes: [
+    { label: "Industry", value: "B2B SaaS" },
+    { label: "Typical deal", value: "Enterprise · Net-30" },
+    { label: "Regions", value: "US, EU, APAC" },
+    { label: "Branding", value: "Logo-forward letterhead" },
+  ],
+}
 
 export const mockVariants: GeneratedVariant[] = [
   {

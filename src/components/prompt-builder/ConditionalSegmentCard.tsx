@@ -1,6 +1,6 @@
 import { ConditionBuilderPanel } from "@/components/prompt-builder/ConditionBuilderPanel"
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
-import { useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
+import { useCanEditBlockContent, useCanEditBlockStructure, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
 import {
   describeConditionRulesShort,
   hasConditions,
@@ -26,6 +26,8 @@ export function ConditionalSegmentCard({
   variant = "standard",
 }: Props) {
   const isPreview = useIsPreviewMode()
+  const canEdit = useCanEditBlockContent(blockId)
+  const canEditStructure = useCanEditBlockStructure()
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
   const updateSegment = usePromptBuilderStore((s) => s.updateSegment)
   const removeSegment = usePromptBuilderStore((s) => s.removeSegment)
@@ -82,7 +84,7 @@ export function ConditionalSegmentCard({
       }`}
     >
       {variant !== "legal" ? (
-        <div className="flex items-start gap-2 border-b border-gray-100/80 px-2.5 py-1.5">
+        <div className="flex items-start gap-2 rounded-t-lg border-b border-gray-100/80 px-2.5 py-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {isConditional ? (
               <GitBranch className="size-3 shrink-0 text-amber-600" />
@@ -98,7 +100,9 @@ export function ConditionalSegmentCard({
 
           <div
             ref={menuRef}
-            className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/segment:opacity-100 group-focus-within/segment:opacity-100"
+            className={`flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/segment:opacity-100 group-focus-within/segment:opacity-100 ${
+              canEditStructure ? "" : "hidden"
+            }`}
           >
             <div className="relative">
               <button
@@ -171,8 +175,10 @@ export function ConditionalSegmentCard({
 
       <div className={variant === "legal" ? "px-0 py-0" : "px-3 py-2"}>
         <InlineEditable
+          blockId={blockId}
           value={segment.text}
           onChange={(text) => updateSegment(blockId, segment.id, { text })}
+          readOnly={!canEdit}
           multiline
           placeholder="Enter terms content…"
           className={`min-h-[2.5rem] leading-relaxed text-gray-700 ${

@@ -101,6 +101,14 @@ const BLOCK_FIELD_DEFS: Partial<Record<BuilderBlockType, FieldDef[]>> = {
   pricing: [
     { field: "subtotal", key: "quote.subtotal", label: "Subtotal", category: "pricing" },
   ],
+  entitlements: [
+    {
+      field: "label",
+      key: "quote.entitlements_label",
+      label: "Section label",
+      category: "quote",
+    },
+  ],
   ae_profile: [
     { field: "name", key: "ae.name", label: "AE name", category: "people" },
     { field: "title", key: "ae.title", label: "AE title", category: "people" },
@@ -121,6 +129,7 @@ const BLOCK_TYPE_LABELS: Record<BuilderBlockType, string> = {
   billed_to: "Billed to",
   contract_details: "Contract details",
   pricing: "Pricing table",
+  entitlements: "Entitlements",
   terms: "Terms & conditions",
   custom_text: "Custom text",
   custom_table: "Custom table",
@@ -138,13 +147,21 @@ export function getVariableDef(
 
 export function getPricingRowVariableDef(
   index: number,
-  part: "item" | "amount",
+  part: "item" | "amount" | "description",
 ): FieldDef {
   if (part === "item") {
     return {
       field: `rows[${index}].item`,
       key: `quote.line_items[${index}].name`,
       label: `Line item ${index + 1}`,
+      category: "pricing",
+    }
+  }
+  if (part === "description") {
+    return {
+      field: `rows[${index}].description`,
+      key: `quote.line_items[${index}].description`,
+      label: `Line item ${index + 1} description`,
       category: "pricing",
     }
   }
@@ -162,6 +179,160 @@ export function getCustomTextVariableDef(blockId: string): FieldDef {
     key: `custom.${blockId}.text`,
     label: "Custom text",
     category: "custom",
+  }
+}
+
+const CATEGORY_ORDER: TemplateVariableCategory[] = [
+  "quote",
+  "customer",
+  "contract",
+  "pricing",
+  "people",
+  "routing",
+  "custom",
+]
+
+function categoryFromKey(key: string): TemplateVariableCategory {
+  if (key.startsWith("customer.")) return "customer"
+  if (key.startsWith("contract.")) return "contract"
+  if (key.startsWith("ae.")) return "people"
+  if (key.startsWith("custom.")) return "custom"
+  if (key.startsWith("deal.")) return "routing"
+  if (key.includes("line_items")) return "pricing"
+  return "quote"
+}
+
+export type VariableCatalogEntry = {
+  key: string
+  label: string
+  category: TemplateVariableCategory
+}
+
+export function getVariableCatalog(): VariableCatalogEntry[] {
+  const seen = new Set<string>()
+  const list: VariableCatalogEntry[] = []
+
+  for (const defs of Object.values(BLOCK_FIELD_DEFS)) {
+    for (const def of defs ?? []) {
+      if (seen.has(def.key)) continue
+      seen.add(def.key)
+      list.push({ key: def.key, label: def.label, category: def.category })
+    }
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const nameKey = `quote.line_items[${i}].name`
+    const amountKey = `quote.line_items[${i}].amount`
+    const descriptionKey = `quote.line_items[${i}].description`
+    if (!seen.has(nameKey)) {
+      seen.add(nameKey)
+      list.push({ key: nameKey, label: `Line item ${i + 1}`, category: "pricing" })
+    }
+    if (!seen.has(amountKey)) {
+      seen.add(amountKey)
+      list.push({
+        key: amountKey,
+        label: `Line item ${i + 1} amount`,
+        category: "pricing",
+      })
+    }
+    if (!seen.has(descriptionKey)) {
+      seen.add(descriptionKey)
+      list.push({
+        key: descriptionKey,
+        label: `Line item ${i + 1} description`,
+        category: "pricing",
+      })
+    }
+  }
+
+  return list.sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a.category)
+    const bi = CATEGORY_ORDER.indexOf(b.category)
+    if (ai !== bi) return ai - bi
+    return a.label.localeCompare(b.label)
+  })
+}
+
+export function getVariableKeyOverrides(
+  content: Record<string, unknown>,
+): Record<string, string> {
+  const raw = content.variableKeys
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
+    ),
+  )
+}
+
+export function getVariableFallbacks(
+  content: Record<string, unknown>,
+): Record<string, string> {
+  const raw = content.variableFallbacks
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  )
+}
+
+export function getVariableFallback(
+  content: Record<string, unknown>,
+  field: string,
+): string {
+  return getVariableFallbacks(content)[field] ?? ""
+}
+
+export function isVariableRemoved(
+  content: Record<string, unknown>,
+  field: string,
+): boolean {
+  const raw = content.variableRemoved
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false
+  return Boolean((raw as Record<string, unknown>)[field])
+}
+
+export function resolveVariableDisplayValue(
+  value: string,
+  content: Record<string, unknown>,
+  field: string,
+): string {
+  const trimmed = value.trim()
+  if (trimmed) return trimmed
+  const fallback = getVariableFallback(content, field).trim()
+  if (fallback) return fallback
+  return ""
+}
+
+export function resolveVariableDef(
+  blockType: BuilderBlockType,
+  field: string,
+  content: Record<string, unknown>,
+  variableDef?: FieldDef,
+): FieldDef | undefined {
+  const base = variableDef ?? getVariableDef(blockType, field)
+  if (!base) return variableDef
+
+  const overrideKey = getVariableKeyOverrides(content)[field]
+  if (!overrideKey || overrideKey === base.key) return base
+
+  const catalogEntry = getVariableCatalog().find((entry) => entry.key === overrideKey)
+  if (catalogEntry) {
+    return {
+      ...base,
+      key: catalogEntry.key,
+      label: catalogEntry.label,
+      category: catalogEntry.category,
+    }
+  }
+
+  return {
+    ...base,
+    key: overrideKey,
+    label: overrideKey,
+    category: categoryFromKey(overrideKey),
   }
 }
 
@@ -188,15 +359,18 @@ export function deriveTemplateVariables(
     const defs = BLOCK_FIELD_DEFS[block.type] ?? []
 
     for (const def of defs) {
+      if (isVariableRemoved(block.content, def.field)) continue
+      const resolved = resolveVariableDef(block.type, def.field, block.content, def)
+      if (!resolved) continue
       const raw = block.content[def.field]
       const sample = formatSample(raw)
       if (!sample) continue
 
       pushUnique(variables, seen, {
         id: `${block.id}:${def.field}`,
-        key: def.key,
-        label: def.label,
-        category: def.category,
+        key: resolved.key,
+        label: resolved.label,
+        category: resolved.category,
         blockId: block.id,
         blockType: block.type,
         blockLabel,
@@ -206,32 +380,77 @@ export function deriveTemplateVariables(
     }
 
     if (block.type === "pricing") {
-      const rows = (block.content.rows as { item: string; amount: string }[]) ?? []
+      const rows =
+        (block.content.rows as {
+          item: string
+          amount: string
+          description?: string
+        }[]) ?? []
       rows.forEach((row, index) => {
-        if (row.item) {
+        const itemField = `rows[${index}].item`
+        const amountField = `rows[${index}].amount`
+        const descriptionField = `rows[${index}].description`
+        if (row.item && !isVariableRemoved(block.content, itemField)) {
+          const baseDef = getPricingRowVariableDef(index, "item")
+          const resolved = resolveVariableDef(
+            block.type,
+            baseDef.field,
+            block.content,
+            baseDef,
+          )!
           pushUnique(variables, seen, {
             id: `${block.id}:row-${index}-item`,
-            key: `quote.line_items[${index}].name`,
-            label: `Line item ${index + 1}`,
-            category: "pricing",
+            key: resolved.key,
+            label: resolved.label,
+            category: resolved.category,
             blockId: block.id,
             blockType: block.type,
             blockLabel,
-            field: `rows[${index}].item`,
+            field: baseDef.field,
             sampleValue: row.item,
           })
         }
-        if (row.amount) {
+        if (row.amount && !isVariableRemoved(block.content, amountField)) {
+          const baseDef = getPricingRowVariableDef(index, "amount")
+          const resolved = resolveVariableDef(
+            block.type,
+            baseDef.field,
+            block.content,
+            baseDef,
+          )!
           pushUnique(variables, seen, {
             id: `${block.id}:row-${index}-amount`,
-            key: `quote.line_items[${index}].amount`,
-            label: `Line item ${index + 1} amount`,
-            category: "pricing",
+            key: resolved.key,
+            label: resolved.label,
+            category: resolved.category,
             blockId: block.id,
             blockType: block.type,
             blockLabel,
-            field: `rows[${index}].amount`,
+            field: baseDef.field,
             sampleValue: row.amount,
+          })
+        }
+        if (
+          row.description &&
+          !isVariableRemoved(block.content, descriptionField)
+        ) {
+          const baseDef = getPricingRowVariableDef(index, "description")
+          const resolved = resolveVariableDef(
+            block.type,
+            baseDef.field,
+            block.content,
+            baseDef,
+          )!
+          pushUnique(variables, seen, {
+            id: `${block.id}:row-${index}-description`,
+            key: resolved.key,
+            label: resolved.label,
+            category: resolved.category,
+            blockId: block.id,
+            blockType: block.type,
+            blockLabel,
+            field: baseDef.field,
+            sampleValue: row.description,
           })
         }
       })
@@ -274,11 +493,14 @@ export function deriveTemplateVariables(
     }
 
     if (block.type === "custom_text" && block.content.text) {
+      if (isVariableRemoved(block.content, "text")) continue
+      const baseDef = getCustomTextVariableDef(block.id)
+      const resolved = resolveVariableDef(block.type, "text", block.content, baseDef)!
       pushUnique(variables, seen, {
         id: `${block.id}:text`,
-        key: `custom.${block.id}.text`,
-        label: "Custom text",
-        category: "custom",
+        key: resolved.key,
+        label: resolved.label,
+        category: resolved.category,
         blockId: block.id,
         blockType: block.type,
         blockLabel,

@@ -15,7 +15,7 @@ export function CustomTextBlockView({ block, onField }: Props) {
   if (variant === "callout") {
     return (
       <div className="flex gap-3 rounded-r-lg border-l-4 border-blue-500 bg-blue-50/50 px-4 py-3">
-        <VariableField
+        <VariableField blockId={block.id}
           blockType="custom_text"
           field="text"
           variableDef={variableDef}
@@ -35,7 +35,7 @@ export function CustomTextBlockView({ block, onField }: Props) {
         <span className="font-serif text-[28px] leading-none text-gray-300">
           &ldquo;
         </span>
-        <VariableField
+        <VariableField blockId={block.id}
           blockType="custom_text"
           field="text"
           variableDef={variableDef}
@@ -49,7 +49,7 @@ export function CustomTextBlockView({ block, onField }: Props) {
   }
 
   return (
-    <VariableField
+    <VariableField blockId={block.id}
       blockType="custom_text"
       field="text"
       variableDef={variableDef}

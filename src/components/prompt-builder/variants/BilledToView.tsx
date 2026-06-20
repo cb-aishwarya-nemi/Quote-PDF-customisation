@@ -12,24 +12,26 @@ type Props = {
 const L = DEFAULT_LABELS.billed_to
 
 function ContactFields({
+  blockId,
   c,
   onField,
   compact,
 }: {
+  blockId: string
   c: Record<string, unknown>
   onField: (field: string, value: string) => void
   compact?: boolean
 }) {
   return (
     <>
-      <VariableField
+      <VariableField blockId={blockId}
         blockType="billed_to"
         field="contactName"
         value={String(c.contactName ?? "")}
         onChange={(v) => onField("contactName", v)}
         className={compact ? "text-[12px] text-gray-700" : "mt-1 text-[13px] text-gray-700"}
       />
-      <VariableField
+      <VariableField blockId={blockId}
         blockType="billed_to"
         field="contact"
         value={String(c.contact ?? "")}
@@ -53,18 +55,19 @@ export function BilledToView({ block, onField }: Props) {
           <div className="mb-2 flex items-center gap-1.5">
             <Building2 className="size-3.5 text-gray-400" />
             <SectionLabel
+              blockId={block.id}
               value={sectionLabel}
               onChange={(v) => onField("sectionLabel", v)}
             />
           </div>
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="billed_to"
             field="name"
             value={String(c.name ?? "")}
             onChange={(v) => onField("name", v)}
             className="text-[14px] font-semibold text-gray-900"
           />
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="billed_to"
             field="address"
             value={String(c.address ?? "")}
@@ -77,11 +80,12 @@ export function BilledToView({ block, onField }: Props) {
           <div className="mb-2 flex items-center gap-1.5">
             <User className="size-3.5 text-gray-400" />
             <SectionLabel
+              blockId={block.id}
               value={contactLabel}
               onChange={(v) => onField("contactColumnLabel", v)}
             />
           </div>
-          <ContactFields c={c} onField={onField} />
+          <ContactFields blockId={block.id} c={c} onField={onField} />
         </div>
       </div>
     )
@@ -98,10 +102,11 @@ export function BilledToView({ block, onField }: Props) {
             </div>
             <div className="min-w-0 flex-1">
               <SectionLabel
+                blockId={block.id}
                 value={sectionLabel}
                 onChange={(v) => onField("sectionLabel", v)}
               />
-              <VariableField
+              <VariableField blockId={block.id}
                 blockType="billed_to"
                 field="name"
                 value={String(c.name ?? "")}
@@ -110,11 +115,11 @@ export function BilledToView({ block, onField }: Props) {
               />
               <div className="mt-2 flex items-start gap-1.5">
                 <User className="mt-0.5 size-3 shrink-0 text-gray-400" />
-                <ContactFields c={c} onField={onField} compact />
+                <ContactFields blockId={block.id} c={c} onField={onField} compact />
               </div>
               <div className="mt-2 flex items-start gap-1.5">
                 <MapPin className="mt-0.5 size-3 shrink-0 text-gray-400" />
-                <VariableField
+                <VariableField blockId={block.id}
                   blockType="billed_to"
                   field="address"
                   value={String(c.address ?? "")}
@@ -133,17 +138,18 @@ export function BilledToView({ block, onField }: Props) {
   return (
     <div>
       <SectionLabel
+        blockId={block.id}
         value={sectionLabel}
         onChange={(v) => onField("sectionLabel", v)}
       />
-      <VariableField
+      <VariableField blockId={block.id}
         blockType="billed_to"
         field="name"
         value={String(c.name ?? "")}
         onChange={(v) => onField("name", v)}
         className="mt-2 text-[14px] font-semibold text-gray-900"
       />
-      <VariableField
+      <VariableField blockId={block.id}
         blockType="billed_to"
         field="contactName"
         value={String(c.contactName ?? "")}
@@ -152,7 +158,7 @@ export function BilledToView({ block, onField }: Props) {
       />
       <div className="mt-0.5 flex items-center gap-1">
         <Mail className="size-3 shrink-0 text-gray-400" />
-        <VariableField
+        <VariableField blockId={block.id}
           blockType="billed_to"
           field="contact"
           value={String(c.contact ?? "")}
@@ -160,7 +166,7 @@ export function BilledToView({ block, onField }: Props) {
           className="text-[12px] text-blue-600"
         />
       </div>
-      <VariableField
+      <VariableField blockId={block.id}
         blockType="billed_to"
         field="address"
         value={String(c.address ?? "")}

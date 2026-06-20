@@ -29,12 +29,22 @@ const defaultTermsSegments = (): ConditionalSegment[] => [
   {
     id: createId("seg"),
     condition: {
-      field: "customer_region",
+      field: "deal_type",
       operator: "is",
-      value: "DE",
-      label: "Germany",
+      value: "termination",
+      label: "Termination",
     },
-    text: "German customers: VAT applies at 19%. Invoices must include your USt-IdNr. Reverse-charge may apply for B2B cross-border services.",
+    text: "Services wind down on the termination effective date. Final invoice reflects usage through that date. Prepaid credits are settled per the master agreement.",
+  },
+  {
+    id: createId("seg"),
+    condition: {
+      field: "deal_type",
+      operator: "is",
+      value: "amendment",
+      label: "Amendment",
+    },
+    text: "This amendment supersedes conflicting terms in the prior order form. All other terms remain in full force.",
   },
   {
     id: createId("seg"),
@@ -52,6 +62,11 @@ function defaultContent(type: BuilderBlockType): Record<string, unknown> {
   switch (type) {
     case "quote_summary_header":
       return {
+        showLogo: true,
+        logoVariant: "default",
+        logoDisplayCondition: null,
+        backgroundImageUrl: "",
+        backgroundImageFileName: "",
         title: "Quote Summary",
         quoteNumber: "QT-2026-0142",
         issued: "Jun 12, 2026",
@@ -108,11 +123,47 @@ function defaultContent(type: BuilderBlockType): Record<string, unknown> {
         amountColumnLabel: "Amount",
         subtotalLabel: "Subtotal",
         rows: [
-          { item: "Enterprise Platform — Annual", amount: "$48,000" },
-          { item: "Premium Support", amount: "$12,000" },
-          { item: "Implementation services", amount: "$8,500" },
+          {
+            item: "Enterprise Platform — Annual",
+            amount: "$48,000",
+            description: "Annual subscription for up to 250 named seats.",
+          },
+          {
+            item: "Premium Support",
+            amount: "$12,000",
+            description: "24×5 support with dedicated CSM and QBRs.",
+          },
+          {
+            item: "Implementation services",
+            amount: "$8,500",
+            description: "One-time onboarding, migration, and configuration.",
+          },
         ],
         subtotal: "$68,500",
+      }
+    case "entitlements":
+      return {
+        label: "Entitlements & usage",
+        nameColumnLabel: "Entitlement",
+        limitColumnLabel: "Included",
+        notesColumnLabel: "Notes",
+        rows: [
+          {
+            name: "Platform seats",
+            limit: "250 users",
+            notes: "Named seats; overage billed monthly at list rate.",
+          },
+          {
+            name: "API calls",
+            limit: "5M / month",
+            notes: "Metered usage with 10% burst allowance.",
+          },
+          {
+            name: "Premium support",
+            limit: "24×5",
+            notes: "Dedicated CSM and quarterly business reviews.",
+          },
+        ],
       }
     case "terms":
       return {
@@ -134,6 +185,8 @@ function defaultContent(type: BuilderBlockType): Record<string, unknown> {
     case "signature":
       return {
         label: "Authorized signature",
+        customerLabel: "Customer signature",
+        vendorLabel: "Vendor signature",
         acceptanceLabel: "Acceptance",
         dateLabel: "Date",
         footerText:
@@ -154,7 +207,10 @@ function defaultContent(type: BuilderBlockType): Record<string, unknown> {
 }
 
 function createBuilderBlock(type: BuilderBlockType, order: number): BuilderBlock {
-  const defaultVariant = BLOCK_VARIANTS[type][0]?.id ?? "classic"
+  const defaultVariant =
+    type === "signature"
+      ? (BLOCK_VARIANTS[type].find((v) => v.id === "dual_party")?.id ?? "dual_party")
+      : (BLOCK_VARIANTS[type][0]?.id ?? "classic")
   return {
     id: createId("block"),
     type,
@@ -170,6 +226,32 @@ function createBuilderBlock(type: BuilderBlockType, order: number): BuilderBlock
 function mapVariantBlock(type: BlockType, order: number): BuilderBlock {
   const builderType = VARIANT_TO_BUILDER[type] ?? "custom_text"
   return createBuilderBlock(builderType, order)
+}
+
+/** Header first; strip legacy upload-image blocks placed above it. */
+export function normalizeBuilderBlocks(blocks: BuilderBlock[]): BuilderBlock[] {
+  const headerIndex = blocks.findIndex(
+    (block) => block.type === "quote_summary_header",
+  )
+  if (headerIndex < 0) {
+    return blocks.map((block, index) => ({ ...block, order: index }))
+  }
+
+  const withoutLeadingImages = blocks.filter((block, index) => {
+    if (index >= headerIndex) return true
+    return block.type !== "custom_image"
+  })
+
+  const nextHeaderIndex = withoutLeadingImages.findIndex(
+    (block) => block.type === "quote_summary_header",
+  )
+  if (nextHeaderIndex <= 0) {
+    return withoutLeadingImages.map((block, index) => ({ ...block, order: index }))
+  }
+
+  const header = withoutLeadingImages[nextHeaderIndex]
+  const rest = withoutLeadingImages.filter((_, index) => index !== nextHeaderIndex)
+  return [header, ...rest].map((block, index) => ({ ...block, order: index }))
 }
 
 export function createStandaloneBuilderBlock(
@@ -213,10 +295,11 @@ export function createBuilderTemplate(
       createBuilderBlock("billed_to", 1),
       createBuilderBlock("contract_details", 2),
       createBuilderBlock("pricing", 3),
-      createBuilderBlock("tcv_summary", 4),
-      createBuilderBlock("terms", 5),
-      createBuilderBlock("signature", 6),
-      createBuilderBlock("ae_profile", 7),
+      createBuilderBlock("entitlements", 4),
+      createBuilderBlock("tcv_summary", 5),
+      createBuilderBlock("terms", 6),
+      createBuilderBlock("signature", 7),
+      createBuilderBlock("ae_profile", 8),
     ]
   }
 
@@ -225,6 +308,6 @@ export function createBuilderTemplate(
     name,
     variantId: options?.variantId,
     presetId: options?.presetId,
-    blocks,
+    blocks: normalizeBuilderBlocks(blocks),
   }
 }

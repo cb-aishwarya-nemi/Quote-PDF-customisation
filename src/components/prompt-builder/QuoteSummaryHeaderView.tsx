@@ -1,5 +1,7 @@
 import { EditableLabel, SectionLabel } from "@/components/prompt-builder/EditableLabel"
+import { HeaderBackgroundShell } from "@/components/prompt-builder/HeaderBackgroundShell"
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
+import { HeaderLogo } from "@/components/prompt-builder/HeaderLogo"
 import { VariableField } from "@/components/prompt-builder/VariableField"
 import { DEFAULT_LABELS, staticLabel } from "@/lib/block-static-labels"
 import type { BuilderBlock } from "@/types/prompt-builder"
@@ -8,7 +10,6 @@ type Props = {
   block: BuilderBlock
   onField: (field: string, value: string) => void
 }
-
 const BLOCK_TYPE = "quote_summary_header" as const
 const L = DEFAULT_LABELS.quote_summary_header
 
@@ -24,19 +25,22 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
 
   if (variant === "centered") {
     return (
-      <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-6 py-5 text-center">
+      <HeaderBackgroundShell block={block} variant="centered">
+        <HeaderLogo block={block} centered />
         <InlineEditable
+          blockId={block.id}
           value={String(c.title ?? "Quote Summary")}
           onChange={(v) => onField("title", v)}
           className="text-[20px] font-semibold text-gray-900"
         />
         <p className="mt-1 text-[13px] text-gray-500">
           <EditableLabel
+            blockId={block.id}
             value={preparedFor}
             onChange={(v) => onField("preparedForLabel", v)}
             className="text-gray-400"
           />{" "}
-          <VariableField
+          <VariableField blockId={block.id}
             blockType={BLOCK_TYPE}
             field="customerName"
             value={String(c.customerName ?? "")}
@@ -48,11 +52,12 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
         <div className="mx-auto mt-4 flex max-w-md flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] text-gray-600">
           <span>
             <EditableLabel
+              blockId={block.id}
               value={quoteNum}
               onChange={(v) => onField("quoteNumberLabel", v)}
               className="text-gray-400"
             />{" "}
-            <VariableField
+            <VariableField blockId={block.id}
               blockType={BLOCK_TYPE}
               field="quoteNumber"
               value={String(c.quoteNumber ?? "")}
@@ -64,11 +69,12 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           <span className="text-gray-300">·</span>
           <span>
             <EditableLabel
+              blockId={block.id}
               value={issued}
               onChange={(v) => onField("issuedLabel", v)}
               className="text-gray-400"
             />{" "}
-            <VariableField
+            <VariableField blockId={block.id}
               blockType={BLOCK_TYPE}
               field="issued"
               value={String(c.issued ?? "")}
@@ -80,11 +86,12 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           <span className="text-gray-300">·</span>
           <span>
             <EditableLabel
+              blockId={block.id}
               value={validUntil}
               onChange={(v) => onField("validUntilLabel", v)}
               className="text-gray-400"
             />{" "}
-            <VariableField
+            <VariableField blockId={block.id}
               blockType={BLOCK_TYPE}
               field="validUntil"
               value={String(c.validUntil ?? "")}
@@ -94,20 +101,23 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
             />
           </span>
         </div>
-      </div>
+      </HeaderBackgroundShell>
     )
   }
 
   if (variant === "minimal") {
     return (
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-2 text-[13px] text-gray-700">
+      <HeaderBackgroundShell block={block} variant="minimal">
+        <HeaderLogo block={block} compact />
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-2 text-[13px] text-gray-700">
         <InlineEditable
+          blockId={block.id}
           value={String(c.title ?? "Quote Summary")}
           onChange={(v) => onField("title", v)}
           className="font-semibold text-gray-900"
         />
         <span className="text-gray-300">·</span>
-        <VariableField
+        <VariableField blockId={block.id}
           blockType={BLOCK_TYPE}
           field="quoteNumber"
           value={String(c.quoteNumber ?? "")}
@@ -118,11 +128,12 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
         <span className="text-gray-300">·</span>
         <span className="text-gray-500">
           <EditableLabel
+            blockId={block.id}
             value={issued}
             onChange={(v) => onField("issuedLabel", v)}
             className="text-gray-500"
           />{" "}
-          <VariableField
+          <VariableField blockId={block.id}
             blockType={BLOCK_TYPE}
             field="issued"
             value={String(c.issued ?? "")}
@@ -134,11 +145,12 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
         <span className="text-gray-300">·</span>
         <span className="text-gray-500">
           <EditableLabel
+            blockId={block.id}
             value={validShort}
             onChange={(v) => onField("validShortLabel", v)}
             className="text-gray-500"
           />{" "}
-          <VariableField
+          <VariableField blockId={block.id}
             blockType={BLOCK_TYPE}
             field="validUntil"
             value={String(c.validUntil ?? "")}
@@ -148,7 +160,7 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           />
         </span>
         <span className="text-gray-300">·</span>
-        <VariableField
+        <VariableField blockId={block.id}
           blockType={BLOCK_TYPE}
           field="customerName"
           value={String(c.customerName ?? "")}
@@ -156,24 +168,28 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           layout="inline"
           className="text-gray-700"
         />
-      </div>
+        </div>
+      </HeaderBackgroundShell>
     )
   }
 
   return (
-    <div>
+    <HeaderBackgroundShell block={block} variant="classic">
+      <HeaderLogo block={block} />
       <InlineEditable
+        blockId={block.id}
         value={String(c.title ?? "Quote Summary")}
         onChange={(v) => onField("title", v)}
         className="text-[16px] font-semibold text-gray-900"
       />
       <p className="mt-0.5 text-[13px] text-gray-500">
         <EditableLabel
+          blockId={block.id}
           value={preparedFor}
           onChange={(v) => onField("preparedForLabel", v)}
           className="text-gray-500"
         />{" "}
-        <VariableField
+        <VariableField blockId={block.id}
           blockType={BLOCK_TYPE}
           field="customerName"
           value={String(c.customerName ?? "")}
@@ -186,10 +202,11 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
       <div className="grid grid-cols-3 gap-4 text-[11px]">
         <div>
           <SectionLabel
+            blockId={block.id}
             value={quoteNum}
             onChange={(v) => onField("quoteNumberLabel", v)}
           />
-          <VariableField
+          <VariableField blockId={block.id}
             blockType={BLOCK_TYPE}
             field="quoteNumber"
             value={String(c.quoteNumber ?? "")}
@@ -199,10 +216,11 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
         </div>
         <div>
           <SectionLabel
+            blockId={block.id}
             value={issued}
             onChange={(v) => onField("issuedLabel", v)}
           />
-          <VariableField
+          <VariableField blockId={block.id}
             blockType={BLOCK_TYPE}
             field="issued"
             value={String(c.issued ?? "")}
@@ -212,10 +230,11 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
         </div>
         <div>
           <SectionLabel
+            blockId={block.id}
             value={validUntil}
             onChange={(v) => onField("validUntilLabel", v)}
           />
-          <VariableField
+          <VariableField blockId={block.id}
             blockType={BLOCK_TYPE}
             field="validUntil"
             value={String(c.validUntil ?? "")}
@@ -224,6 +243,6 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           />
         </div>
       </div>
-    </div>
+    </HeaderBackgroundShell>
   )
 }

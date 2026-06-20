@@ -26,18 +26,19 @@ export function AeProfileView({ block, onField }: Props) {
         </div>
         <div className="min-w-0 flex-1">
           <SectionLabel
+            blockId={block.id}
             value={sectionLabel}
             onChange={(v) => onField("sectionLabel", v)}
             className="tracking-widest text-teal-200/70"
           />
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="ae_profile"
             field="name"
             value={String(c.name ?? "")}
             onChange={(v) => onField("name", v)}
             className="text-[16px] font-bold text-white"
           />
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="ae_profile"
             field="title"
             value={String(c.title ?? "")}
@@ -46,14 +47,14 @@ export function AeProfileView({ block, onField }: Props) {
           />
         </div>
         <div className="hidden shrink-0 text-right text-[11px] sm:block">
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="ae_profile"
             field="email"
             value={String(c.email ?? "")}
             onChange={(v) => onField("email", v)}
             className="text-teal-100"
           />
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="ae_profile"
             field="phone"
             value={String(c.phone ?? "")}
@@ -72,7 +73,7 @@ export function AeProfileView({ block, onField }: Props) {
           <User className="size-4 text-gray-500" />
         </div>
         <div className="min-w-0 flex-1 text-[12px]">
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="ae_profile"
             field="name"
             value={String(c.name ?? "")}
@@ -80,7 +81,7 @@ export function AeProfileView({ block, onField }: Props) {
             className="inline font-semibold text-gray-900"
           />
           <span className="text-gray-400"> · </span>
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="ae_profile"
             field="title"
             value={String(c.title ?? "")}
@@ -88,7 +89,7 @@ export function AeProfileView({ block, onField }: Props) {
             className="inline text-gray-500"
           />
         </div>
-        <VariableField
+        <VariableField blockId={block.id}
           blockType="ae_profile"
           field="email"
           value={String(c.email ?? "")}
@@ -105,14 +106,14 @@ export function AeProfileView({ block, onField }: Props) {
         <User className="size-5 text-gray-500" />
       </div>
       <div className="text-[12px]">
-        <VariableField
+        <VariableField blockId={block.id}
           blockType="ae_profile"
           field="name"
           value={String(c.name ?? "")}
           onChange={(v) => onField("name", v)}
           className="text-[14px] font-semibold text-gray-900"
         />
-        <VariableField
+        <VariableField blockId={block.id}
           blockType="ae_profile"
           field="title"
           value={String(c.title ?? "")}
@@ -122,7 +123,7 @@ export function AeProfileView({ block, onField }: Props) {
         <div className="mt-2 space-y-0.5">
           <div className="flex items-center gap-1.5">
             <Mail className="size-3 text-gray-400" />
-            <VariableField
+            <VariableField blockId={block.id}
               blockType="ae_profile"
               field="email"
               value={String(c.email ?? "")}
@@ -132,7 +133,7 @@ export function AeProfileView({ block, onField }: Props) {
           </div>
           <div className="flex items-center gap-1.5">
             <Phone className="size-3 text-gray-400" />
-            <VariableField
+            <VariableField blockId={block.id}
               blockType="ae_profile"
               field="phone"
               value={String(c.phone ?? "")}

@@ -15,6 +15,17 @@ export type ConditionFieldDef = {
 
 export const CONDITION_FIELDS: ConditionFieldDef[] = [
   {
+    field: "deal_type",
+    label: "Deal type",
+    operators: ["is", "is_not"],
+    values: [
+      { value: "new_business", label: "New business" },
+      { value: "expansion", label: "Expansion" },
+      { value: "amendment", label: "Amendment" },
+      { value: "termination", label: "Termination" },
+    ],
+  },
+  {
     field: "customer_region",
     label: "Region",
     operators: ["is", "is_not"],

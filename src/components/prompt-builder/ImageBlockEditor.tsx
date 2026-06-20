@@ -4,7 +4,7 @@ import {
   ImageWithOverlays,
   createDefaultOverlay,
 } from "@/components/prompt-builder/ImageWithOverlays"
-import { useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
+import { useCanEditBlockContent, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
 import {
   isImageFile,
   isPdfFile,
@@ -13,6 +13,7 @@ import {
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import {
   getDisplayedPages,
+  IMAGE_BLOCK_ACCEPT,
   imageBlockHasMedia,
   parseImageBlockContent,
   type ImageBlockContent,
@@ -28,10 +29,9 @@ import {
   Upload,
   X,
 } from "lucide-react"
-import { useRef, useState, type ReactNode } from "react"
+import { useRef, useState, useEffect, type ReactNode } from "react"
 
-const ACCEPT =
-  ".pdf,application/pdf,image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+const ACCEPT = IMAGE_BLOCK_ACCEPT
 
 type PendingPdf = {
   fileName: string
@@ -48,7 +48,15 @@ type Props = {
 
 export function ImageBlockEditor({ blockId, content: raw, caption }: Props) {
   const isPreview = useIsPreviewMode()
+  const canEdit = useCanEditBlockContent(blockId)
+  const isReadOnly = isPreview || !canEdit
   const updateBlockContent = usePromptBuilderStore((s) => s.updateBlockContent)
+  const pendingImagePdfImport = usePromptBuilderStore(
+    (s) => s.pendingImagePdfImport,
+  )
+  const clearPendingImagePdfImport = usePromptBuilderStore(
+    (s) => s.clearPendingImagePdfImport,
+  )
   const content = parseImageBlockContent(raw)
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -60,6 +68,21 @@ export function ImageBlockEditor({ blockId, content: raw, caption }: Props) {
   const hasMedia = imageBlockHasMedia(content)
   const displayedPages = getDisplayedPages(content)
   const overlays = content.textOverlays ?? []
+  const storedUploadError =
+    typeof raw.uploadError === "string" ? raw.uploadError : null
+
+  useEffect(() => {
+    if (!pendingImagePdfImport || pendingImagePdfImport.blockId !== blockId) {
+      return
+    }
+    setPendingPdf({
+      fileName: pendingImagePdfImport.fileName,
+      pdfDataUrl: pendingImagePdfImport.pdfDataUrl,
+      pageCount: pendingImagePdfImport.pageCount,
+    })
+    setShowPagePicker(true)
+    clearPendingImagePdfImport()
+  }, [blockId, pendingImagePdfImport, clearPendingImagePdfImport])
 
   const applyContent = (patch: Partial<ImageBlockContent>) => {
     updateBlockContent(blockId, {
@@ -205,13 +228,29 @@ export function ImageBlockEditor({ blockId, content: raw, caption }: Props) {
   )
 
   if (!hasMedia) {
-    if (isPreview) {
+    if (isReadOnly) {
       return (
         <div className="flex min-h-[80px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-4 py-6 text-[12px] text-gray-400">
           Image or PDF block — no asset uploaded
         </div>
       )
     }
+
+    if (loading) {
+      return (
+        <>
+          {pagePicker}
+          {hiddenInput}
+          <div className="flex min-h-[80px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-4 py-6">
+            <Loader2 className="size-5 animate-spin text-blue-500" />
+            <span className="ml-2 text-[12px] text-gray-500">Processing file…</span>
+          </div>
+        </>
+      )
+    }
+
+    const displayError = error ?? storedUploadError
+
     return (
       <>
         {pagePicker}
@@ -257,9 +296,9 @@ export function ImageBlockEditor({ blockId, content: raw, caption }: Props) {
             </p>
           </div>
           {hiddenInput}
-          {error && (
+          {displayError && (
             <p className="text-[11px] text-red-600" role="alert">
-              {error}
+              {displayError}
             </p>
           )}
         </div>
@@ -271,7 +310,7 @@ export function ImageBlockEditor({ blockId, content: raw, caption }: Props) {
   const pageCount = content.pageCount ?? 1
   const importedCount = displayedPages.length
 
-  if (isPreview) {
+  if (isReadOnly) {
     return (
       <div className="space-y-2">
         {displayedPages.length > 1 ? (

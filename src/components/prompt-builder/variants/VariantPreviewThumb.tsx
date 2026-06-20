@@ -193,6 +193,50 @@ export function VariantPreviewThumb({ blockType, variantId, selected }: Props) {
         </div>
       )
     }
+    if (variantId === "with_descriptions") {
+      return (
+        <div className={`${shell} gap-0 p-0`}>
+          <div
+            className={`h-1.5 w-full border-b ${selected ? "border-cb-orange/30 bg-cb-orange/10" : "border-gray-200 bg-gray-100"}`}
+          />
+          <div className="flex flex-1 flex-col justify-center gap-1 px-0.5 py-0.5">
+            <Bar className={mid} />
+            <Bar w="w-full" className={faint} />
+            <Bar className={mid} />
+            <Bar w="w-full" className={faint} />
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className={`${shell} gap-0 p-0`}>
+        <div className={`h-1.5 w-full border-b ${selected ? "border-cb-orange/30 bg-cb-orange/10" : "border-gray-200 bg-gray-100"}`} />
+        <div className="flex flex-1 flex-col justify-center gap-0.5 px-0.5">
+          <Bar className={faint} />
+          <Bar className={faint} />
+        </div>
+      </div>
+    )
+  }
+
+  if (blockType === "entitlements") {
+    if (variantId === "list") {
+      return (
+        <div className={`${shell} gap-1 border-l-2 ${selected ? "border-cb-orange/40" : "border-gray-200"} pl-1`}>
+          <Bar className={mid} />
+          <Bar w="w-4/5" className={faint} />
+          <Bar w="w-3/4" className={faint} />
+        </div>
+      )
+    }
+    if (variantId === "compact") {
+      return (
+        <div className={`${shell} gap-0.5`}>
+          <Bar className={mid} />
+          <Bar className={faint} />
+        </div>
+      )
+    }
     return (
       <div className={`${shell} gap-0 p-0`}>
         <div className={`h-1.5 w-full border-b ${selected ? "border-cb-orange/30 bg-cb-orange/10" : "border-gray-200 bg-gray-100"}`} />
@@ -255,6 +299,14 @@ export function VariantPreviewThumb({ blockType, variantId, selected }: Props) {
       return (
         <div className={`${shell} justify-end`}>
           <Bar w="w-full" className={mid} />
+        </div>
+      )
+    }
+    if (variantId === "dual_party") {
+      return (
+        <div className={`${shell} flex-row items-end gap-1`}>
+          <Bar w="w-1/2" className={mid} />
+          <Bar w="w-1/2" className={mid} />
         </div>
       )
     }

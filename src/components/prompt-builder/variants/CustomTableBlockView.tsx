@@ -59,6 +59,7 @@ export function CustomTableBlockView({ block, onField }: Props) {
           {headers.map((h, i) => (
             <th key={i} className={thClass}>
               <InlineEditable
+                blockId={block.id}
                 value={h}
                 onChange={(v) => updateHeader(i, v)}
                 className="font-inherit"
@@ -84,6 +85,7 @@ export function CustomTableBlockView({ block, onField }: Props) {
             {row.map((cell, ci) => (
               <td key={ci} className={tdClass}>
                 <InlineEditable
+                  blockId={block.id}
                   value={cell}
                   onChange={(v) => updateCell(ri, ci, v)}
                 />

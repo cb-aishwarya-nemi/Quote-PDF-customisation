@@ -1,5 +1,4 @@
 import { BLOCK_VARIANTS } from "@/lib/block-variants"
-import { imageBlockHasMedia, parseImageBlockContent } from "@/types/image-block"
 import type {
   BuilderBlock,
   BuilderTemplate,
@@ -22,6 +21,7 @@ const BLOCK_LABELS: Record<string, string> = {
   billed_to: "billed to",
   contract_details: "contract details",
   pricing: "pricing table",
+  entitlements: "entitlements",
   terms: "terms",
   custom_text: "text block",
   custom_table: "table",
@@ -53,6 +53,16 @@ function hasConditionValue(template: BuilderTemplate, field: string, value: stri
   return termsSegments(template).some((s) =>
     segmentHasConditionValue(s.condition, field, value),
   )
+}
+
+function hasDealTypeCondition(template: BuilderTemplate, dealType: string) {
+  return termsSegments(template).some((s) =>
+    segmentHasConditionValue(s.condition, "deal_type", dealType),
+  )
+}
+
+function scenarioDealType(scenario: PreviewScenario) {
+  return scenario.values.deal_type ?? "new_business"
 }
 
 function push(
@@ -138,34 +148,6 @@ export function deriveAgentSuggestions(input: {
     )
   }
 
-  const imageBlock = getBlock(template, "custom_image")
-  if (!imageBlock) {
-    push(
-      suggestions,
-      {
-        id: "add-image",
-        label: "Add logo / image",
-        prompt: "Add an image block for the company logo",
-        priority: 60,
-      },
-      usedPrompts,
-    )
-  } else {
-    const imageContent = parseImageBlockContent(imageBlock.content)
-    if (!imageBlockHasMedia(imageContent)) {
-      push(
-        suggestions,
-        {
-          id: "upload-image",
-          label: "Upload logo",
-          prompt: "Remind me to upload a logo in the image block",
-          priority: 85,
-        },
-        usedPrompts,
-      )
-    }
-  }
-
   if (
     !hasConditionValue(template, "customer_region", "DE") ||
     !hasConditionValue(template, "customer_region", "APAC")
@@ -182,7 +164,47 @@ export function deriveAgentSuggestions(input: {
     )
   }
 
-  if (activeScenario.id === "de" && !hasConditionValue(template, "customer_region", "DE")) {
+  if (!hasBlock(template, "entitlements")) {
+    push(
+      suggestions,
+      {
+        id: "add-entitlements",
+        label: "Add entitlements",
+        prompt: "Add an entitlements block to explain what's included",
+        priority: 72,
+      },
+      usedPrompts,
+    )
+  }
+
+  const dealType = scenarioDealType(activeScenario)
+  if (dealType === "expansion" && !hasDealTypeCondition(template, "expansion")) {
+    push(
+      suggestions,
+      {
+        id: "expansion-terms",
+        label: "Expansion co-term clause",
+        prompt: "Add expansion co-termination terms",
+        priority: 90,
+      },
+      usedPrompts,
+    )
+  }
+
+  if (dealType === "termination" && !hasDealTypeCondition(template, "termination")) {
+    push(
+      suggestions,
+      {
+        id: "termination-terms",
+        label: "Wind-down clause",
+        prompt: "Add termination wind-down terms",
+        priority: 90,
+      },
+      usedPrompts,
+    )
+  }
+
+  if (activeScenario.id === "new-de" && !hasConditionValue(template, "customer_region", "DE")) {
     push(
       suggestions,
       {
@@ -195,7 +217,7 @@ export function deriveAgentSuggestions(input: {
     )
   }
 
-  if (activeScenario.id === "apac" && !hasConditionValue(template, "customer_region", "APAC")) {
+  if (activeScenario.id === "new-apac" && !hasConditionValue(template, "customer_region", "APAC")) {
     push(
       suggestions,
       {
@@ -208,7 +230,7 @@ export function deriveAgentSuggestions(input: {
     )
   }
 
-  if (activeScenario.id === "us" && activeScenario.values.payment_terms === "Net-30") {
+  if (activeScenario.id === "new-us" && activeScenario.values.payment_terms === "Net-30") {
     push(
       suggestions,
       {
@@ -278,6 +300,17 @@ export function deriveAgentSuggestions(input: {
       case "pricing":
         suggestVariant(suggestions, selected, "quote", "Quote-style pricing", usedPrompts)
         suggestVariant(suggestions, selected, "compact", "Compact pricing", usedPrompts)
+        suggestVariant(
+          suggestions,
+          selected,
+          "with_descriptions",
+          "Line item descriptions",
+          usedPrompts,
+        )
+        break
+      case "entitlements":
+        suggestVariant(suggestions, selected, "list", "Narrative entitlements", usedPrompts)
+        suggestVariant(suggestions, selected, "compact", "Compact entitlements", usedPrompts)
         break
       case "terms":
         suggestVariant(suggestions, selected, "numbered", "Numbered terms", usedPrompts)
@@ -298,7 +331,8 @@ export function deriveAgentSuggestions(input: {
         suggestVariant(suggestions, selected, "inline", "Inline AE row", usedPrompts)
         break
       case "signature":
-        suggestVariant(suggestions, selected, "boxed", "Boxed signature", usedPrompts)
+        suggestVariant(suggestions, selected, "dual_party", "Dual-party signature", usedPrompts)
+        suggestVariant(suggestions, selected, "boxed", "Order form signature", usedPrompts)
         suggestVariant(suggestions, selected, "single", "Single-line signature", usedPrompts)
         break
       case "custom_image":
@@ -341,7 +375,30 @@ export function deriveAgentSuggestions(input: {
     )
   }
 
+  if (suggestions.length === 0) {
+    push(
+      suggestions,
+      {
+        id: "validate-preview",
+        label: "Validate in preview",
+        prompt: "What should I check in preview before publishing?",
+        priority: 50,
+      },
+      usedPrompts,
+    )
+    push(
+      suggestions,
+      {
+        id: "deal-type-scenarios",
+        label: "Check deal-type scenarios",
+        prompt: "Help me validate this template for different deal types",
+        priority: 48,
+      },
+      usedPrompts,
+    )
+  }
+
   return suggestions
     .sort((a, b) => b.priority - a.priority)
-    .slice(0, 6)
+    .slice(0, 5)
 }

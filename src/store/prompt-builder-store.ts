@@ -1,14 +1,33 @@
 import { BLOCK_VARIANTS } from "@/lib/block-variants"
+import { isBlockLocked } from "@/lib/block-lock"
+import {
+  isImageFile,
+  isPdfFile,
+  preparePdfUpload,
+  readFileAsDataUrl,
+} from "@/lib/pdf-page-render"
 import {
   createConditionRule,
   segmentHasConditionValue,
 } from "@/lib/segment-conditions"
-import { createStandaloneBuilderBlock } from "@/lib/create-builder-template"
+import { createStandaloneBuilderBlock, normalizeBuilderBlocks } from "@/lib/create-builder-template"
 import {
-  buildVariablesWelcomeMessage,
+  normalizeBlockLayout,
+  setBlockLayoutColumn,
+} from "@/lib/block-layout"
+import {
   formatVariablesListReply,
 } from "@/lib/derive-template-variables"
 import { createId } from "@/lib/create-id"
+import { makeGenerationSummaryMessage } from "@/lib/template-generation-steps"
+import {
+  applyAgentDemoChanges,
+  DEMO_USER_PROMPT,
+  DEMO_WELCOME_MESSAGE,
+  finishAgentDemoPreview,
+  formatDemoReply,
+  scheduleAgentPreview,
+} from "@/lib/agent-demo-flow"
 import type {
   BlockDisplayCondition,
   BuilderBlock,
@@ -19,8 +38,22 @@ import type {
   PreviewScenario,
 } from "@/types/prompt-builder"
 import { PREVIEW_SCENARIOS } from "@/types/prompt-builder"
+import { arrayMove } from "@dnd-kit/sortable"
 import { create } from "zustand"
 
+function blockLockedInSalesMode(
+  editorMode: BuilderEditorMode,
+  block: BuilderBlock | undefined,
+): boolean {
+  return editorMode === "sales" && isBlockLocked(block?.content)
+}
+
+function findTemplateBlock(
+  template: BuilderTemplate | null,
+  blockId: string,
+): BuilderBlock | undefined {
+  return template?.blocks.find((b) => b.id === blockId)
+}
 function findBlockByType(template: BuilderTemplate, type: BuilderBlock["type"]) {
   return template.blocks.find((b) => b.type === type)
 }
@@ -41,7 +74,7 @@ function switchVariant(
   return `Switched the ${label} to the ${variantId.replace(/_/g, " ")} layout. Check the canvas preview.`
 }
 
-export type BuilderEditorMode = "edit" | "preview"
+export type BuilderEditorMode = "edit" | "preview" | "sales"
 
 type PromptBuilderStore = {
   template: BuilderTemplate | null
@@ -50,22 +83,40 @@ type PromptBuilderStore = {
   activeScenario: PreviewScenario
   messages: ChatMessage[]
   isAgentTyping: boolean
+  /** PDF picked during add-block flow — opens page picker on the new block */
+  pendingImagePdfImport: {
+    blockId: string
+    fileName: string
+    pdfDataUrl: string
+    pageCount: number
+  } | null
 
-  initTemplate: (template: BuilderTemplate) => void
+  initTemplate: (
+    template: BuilderTemplate,
+    options?: { generationStepLabels?: string[] },
+  ) => void
   openPreview: () => void
   closePreview: () => void
+  openSalesEdit: () => void
+  closeSalesEdit: () => void
   setTemplateName: (name: string) => void
   setSelectedBlockId: (id: string | null) => void
   setActiveScenario: (scenario: PreviewScenario) => void
   updateBlockContent: (blockId: string, content: Record<string, unknown>) => void
   updateBlockField: (blockId: string, field: string, value: unknown) => void
   addBlock: (type: BuilderBlockType, afterId?: string) => void
+  addBlockBeside: (blockId: string, type: BuilderBlockType) => void
+  addImageBlockFromFile: (file: File, afterId?: string) => void
+  addImageBlockFromFileBeside: (file: File, blockId: string) => void
+  clearPendingImagePdfImport: () => void
   removeBlock: (blockId: string) => void
+  reorderBlocks: (from: number, to: number) => void
   setBlockVariant: (blockId: string, variant: string) => void
   setBlockDisplayCondition: (
     blockId: string,
     condition: BlockDisplayCondition,
   ) => void
+  setBlockLocked: (blockId: string, locked: boolean) => void
   cycleBlockVariant: (blockId: string) => void
   updateSegment: (
     blockId: string,
@@ -75,23 +126,6 @@ type PromptBuilderStore = {
   addSegment: (blockId: string, segment: ConditionalSegment) => void
   removeSegment: (blockId: string, segmentId: string) => void
   sendMessage: (text: string) => void
-}
-
-const WELCOME: ChatMessage = {
-  id: "welcome",
-  role: "assistant",
-  content:
-    "I can help refine this quote template. Add blocks and I'll identify merge variables automatically.",
-  timestamp: new Date().toISOString(),
-}
-
-function makeWelcomeMessage(template: BuilderTemplate): ChatMessage {
-  return {
-    id: "welcome",
-    role: "assistant",
-    content: buildVariablesWelcomeMessage(template),
-    timestamp: new Date().toISOString(),
-  }
 }
 
 function agentReply(
@@ -128,23 +162,15 @@ function agentReply(
   }
 
   if (lower.includes("remind") && lower.includes("logo")) {
-    const image = findBlockByType(template, "custom_image")
-    if (image) {
-      set({ selectedBlockId: image.id })
-      return "Select the image block on the canvas and upload your company logo or brand PDF."
-    }
-    get().addBlock("custom_image")
-    return "Added an image block — click it on the canvas to upload your logo."
+    const header = findBlockByType(template, "quote_summary_header")
+    if (header) set({ selectedBlockId: header.id })
+    return "Your company logo appears at the top of the quote summary header — it uses your brand from setup."
   }
 
   if (lower.includes("image block") || (lower.includes("logo") && lower.includes("add"))) {
-    const hasImage = template.blocks.some((b) => b.type === "custom_image")
-    if (!hasImage) {
-      get().addBlock("custom_image")
-      return "Added an image block for your logo. Upload an image or PDF on the canvas."
-    }
-    set({ selectedBlockId: findBlockByType(template, "custom_image")?.id ?? null })
-    return "An image block is already on the template — upload your asset directly on the canvas."
+    const header = findBlockByType(template, "quote_summary_header")
+    if (header) set({ selectedBlockId: header.id })
+    return "Logo placement is in the quote summary header at the top of the document."
   }
 
   const variantMatchers: {
@@ -214,6 +240,14 @@ function agentReply(
       label: "pricing table",
     },
     {
+      match: (s) =>
+        s.includes("description") &&
+        (s.includes("line item") || s.includes("pricing")),
+      type: "pricing",
+      variantId: "with_descriptions",
+      label: "pricing table",
+    },
+    {
       match: (s) => s.includes("numbered") && s.includes("terms"),
       type: "terms",
       variantId: "numbered",
@@ -241,6 +275,14 @@ function agentReply(
       match: (s) => s.includes("boxed") && s.includes("signature"),
       type: "signature",
       variantId: "boxed",
+      label: "signature",
+    },
+    {
+      match: (s) =>
+        (s.includes("dual-party") || s.includes("dual party") || s.includes("countersign")) &&
+        s.includes("signature"),
+      type: "signature",
+      variantId: "dual_party",
       label: "signature",
     },
     {
@@ -305,9 +347,9 @@ function agentReply(
     if (terms) {
       const region = activeScenario.values.customer_region
       const label =
-        activeScenario.id === "de"
+        activeScenario.id === "new-de"
           ? "Germany"
-          : activeScenario.id === "apac"
+          : activeScenario.id === "new-apac"
             ? "APAC"
             : "United States"
       get().addSegment(terms.id, {
@@ -330,7 +372,10 @@ function agentReply(
     const terms = findBlockByType(template, "terms")
     if (terms) {
       const segments = (terms.content.segments as ConditionalSegment[]) ?? []
-      if (!segments.some((s) => segmentHasConditionValue(s.condition, "customer_region", "DE"))) {
+      const added = !segments.some((s) =>
+        segmentHasConditionValue(s.condition, "customer_region", "DE"),
+      )
+      if (added) {
         get().addSegment(terms.id, {
           id: createId("seg"),
           condition: [
@@ -343,8 +388,15 @@ function agentReply(
           text: "German customers: VAT applies at 19%. Invoices must include your USt-IdNr.",
         })
       }
+      if (!isBlockLocked(terms.content)) {
+        get().setBlockLocked(terms.id, true)
+      }
       set({ selectedBlockId: terms.id })
-      return "Added a German VAT clause under Terms. Preview with the Germany · EU scenario."
+      scheduleAgentPreview(get, "new-de")
+      if (added) {
+        return "Added a German VAT clause under Terms and locked the block for Sales.\n\nOpening preview on Germany · EU — the VAT paragraph appears when the customer region matches."
+      }
+      return "The German VAT clause is already in place and Terms are locked.\n\nOpening preview on Germany · EU so you can verify the clause renders."
     }
   }
 
@@ -421,11 +473,102 @@ function agentReply(
     }
   }
 
+  if (
+    lower.includes("expansion") &&
+    (lower.includes("co-term") || lower.includes("coterm") || lower.includes("terms"))
+  ) {
+    const terms = findBlockByType(template, "terms")
+    if (terms) {
+      const segments = (terms.content.segments as ConditionalSegment[]) ?? []
+      const added = !segments.some((s) =>
+        segmentHasConditionValue(s.condition, "deal_type", "expansion"),
+      )
+      if (added) {
+        get().addSegment(terms.id, {
+          id: createId("seg"),
+          condition: [
+            {
+              ...createConditionRule("deal_type"),
+              value: "expansion",
+              label: "Expansion",
+            },
+          ],
+          text: "This expansion co-terms with the existing subscription. Prorated charges apply from the effective date.",
+        })
+      }
+      if (!isBlockLocked(terms.content)) {
+        get().setBlockLocked(terms.id, true)
+      }
+      set({ selectedBlockId: terms.id })
+      scheduleAgentPreview(get, "exp-eu")
+      if (added) {
+        return "Added an expansion co-termination clause and locked Terms for Sales.\n\nOpening preview on EU · Co-term add-on — the co-term paragraph appears when deal type is Expansion."
+      }
+      return "The expansion co-term clause is already in place and Terms are locked.\n\nOpening preview on EU · Co-term add-on so you can verify it renders."
+    }
+  }
+
+  if (
+    lower.includes("termination") &&
+    (lower.includes("wind-down") || lower.includes("wind down") || lower.includes("terms"))
+  ) {
+    const terms = findBlockByType(template, "terms")
+    if (terms) {
+      const segments = (terms.content.segments as ConditionalSegment[]) ?? []
+      if (!segments.some((s) => segmentHasConditionValue(s.condition, "deal_type", "termination"))) {
+        get().addSegment(terms.id, {
+          id: createId("seg"),
+          condition: [
+            {
+              ...createConditionRule("deal_type"),
+              value: "termination",
+              label: "Termination",
+            },
+          ],
+          text: "Services wind down on the termination effective date. Final invoice reflects usage through that date.",
+        })
+      }
+      set({ selectedBlockId: terms.id })
+      return "Added a termination wind-down clause. Preview with the Termination · US scenario."
+    }
+  }
+
+  if (lower.includes("entitlement")) {
+    const hasEnt = template.blocks.some((b) => b.type === "entitlements")
+    if (!hasEnt) {
+      const pricing = findBlockByType(template, "pricing")
+      get().addBlock("entitlements", pricing?.id)
+      return "Added an entitlements block after pricing to explain what's included in the offer."
+    }
+    set({
+      selectedBlockId: findBlockByType(template, "entitlements")?.id ?? null,
+    })
+    return "The entitlements block is on the canvas — edit rows inline to explain usage and limits."
+  }
+
   if (lower.includes("signature")) {
     const hasSig = template.blocks.some((b) => b.type === "signature")
     if (!hasSig) {
       get().addBlock("signature")
       return "Added a signature block at the end of the template."
+    }
+    if (lower.includes("end") || lower.includes("last") || lower.includes("move")) {
+      const sig = findBlockByType(template, "signature")
+      if (sig) {
+        set((s) => {
+          if (!s.template) return s
+          const blocks = s.template.blocks.filter((b) => b.id !== sig.id)
+          blocks.push(sig)
+          return {
+            template: {
+              ...s.template,
+              blocks: blocks.map((b, i) => ({ ...b, order: i })),
+            },
+            selectedBlockId: sig.id,
+          }
+        })
+        return "Moved the signature block to the end of the template."
+      }
     }
     return "A signature block is already on the canvas."
   }
@@ -445,6 +588,26 @@ function agentReply(
     return "Inserted a custom table block. Edit headers and cells directly on the canvas."
   }
 
+  if (
+    lower.includes("prepare this template") ||
+    lower.includes("run demo") ||
+    lower.includes("global sales team demo") ||
+    lower.includes("sales-ready demo")
+  ) {
+    const changes = applyAgentDemoChanges(get())
+    setTimeout(() => finishAgentDemoPreview(get()), 1400)
+    return formatDemoReply(changes)
+  }
+
+  if (lower.includes("lock") && (lower.includes("terms") || lower.includes("legal"))) {
+    const terms = findBlockByType(template, "terms")
+    if (terms) {
+      get().setBlockLocked(terms.id, true)
+      set({ selectedBlockId: terms.id })
+      return "Locked the Terms & conditions block. Sales won't be able to edit it at quote creation."
+    }
+  }
+
   if (lower.includes("text block") || lower.includes("custom text")) {
     get().addBlock("custom_text")
     return "Added a custom text block. Click the text on the canvas to edit."
@@ -458,21 +621,50 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   selectedBlockId: null,
   editorMode: "edit",
   activeScenario: PREVIEW_SCENARIOS[0],
-  messages: [WELCOME],
+  messages: [],
   isAgentTyping: false,
+  pendingImagePdfImport: null,
 
-  initTemplate: (template) =>
+  initTemplate: (template, options) => {
+    const messages = options?.generationStepLabels?.length
+      ? [
+          makeGenerationSummaryMessage(options.generationStepLabels),
+          {
+            id: "welcome",
+            role: "assistant" as const,
+            content: "Use the suggested prompts below to reshape the template, or type what you want in the chat.",
+            timestamp: new Date().toISOString(),
+          },
+        ]
+      : [
+          {
+            id: "welcome",
+            role: "assistant" as const,
+            content: DEMO_WELCOME_MESSAGE,
+            timestamp: new Date().toISOString(),
+          },
+        ]
+
     set({
-      template,
+      template: {
+        ...template,
+        blocks: normalizeBuilderBlocks(template.blocks),
+      },
       selectedBlockId: null,
       editorMode: "edit",
-      messages: [makeWelcomeMessage(template)],
+      messages,
       activeScenario: PREVIEW_SCENARIOS[0],
-    }),
+      pendingImagePdfImport: null,
+    })
+  },
 
   openPreview: () => set({ editorMode: "preview", selectedBlockId: null }),
 
   closePreview: () => set({ editorMode: "edit" }),
+
+  openSalesEdit: () => set({ editorMode: "sales", selectedBlockId: null }),
+
+  closeSalesEdit: () => set({ editorMode: "edit" }),
 
   setTemplateName: (name) =>
     set((s) =>
@@ -486,6 +678,8 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   updateBlockContent: (blockId, content) =>
     set((s) => {
       if (!s.template) return s
+      const block = findTemplateBlock(s.template, blockId)
+      if (blockLockedInSalesMode(s.editorMode, block)) return s
       return {
         template: {
           ...s.template,
@@ -499,6 +693,13 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   updateBlockField: (blockId, field, value) =>
     set((s) => {
       if (!s.template) return s
+      const block = findTemplateBlock(s.template, blockId)
+      if (
+        field !== "locked" &&
+        blockLockedInSalesMode(s.editorMode, block)
+      ) {
+        return s
+      }
       return {
         template: {
           ...s.template,
@@ -513,7 +714,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   addBlock: (type, afterId) =>
     set((s) => {
-      if (!s.template) return s
+      if (!s.template || s.editorMode === "sales") return s
       const blocks = [...s.template.blocks]
       const newBlock = createStandaloneBuilderBlock(type, blocks.length)
       if (afterId === "__start__") {
@@ -527,34 +728,170 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       return {
         template: {
           ...s.template,
-          blocks: blocks.map((b, i) => ({ ...b, order: i })),
+          blocks: normalizeBlockLayout(blocks).map((b, i) => ({ ...b, order: i })),
         },
         selectedBlockId: newBlock.id,
       }
     }),
 
-  removeBlock: (blockId) =>
+  addBlockBeside: (blockId, type) =>
     set((s) => {
-      if (!s.template) return s
+      if (!s.template || s.editorMode === "sales") return s
+      const blocks = [...s.template.blocks]
+      const index = blocks.findIndex((b) => b.id === blockId)
+      if (index < 0) return s
+
+      const leftBlock = blocks[index]
+      const nextBlock = blocks[index + 1]
+      if (nextBlock && String(nextBlock.content.layoutColumn) === "right") return s
+
+      blocks[index] = setBlockLayoutColumn(leftBlock, "left")
+      const newBlock = setBlockLayoutColumn(
+        createStandaloneBuilderBlock(type, blocks.length),
+        "right",
+      )
+      blocks.splice(index + 1, 0, newBlock)
+
       return {
         template: {
           ...s.template,
-          blocks: s.template.blocks
-            .filter((b) => b.id !== blockId)
-            .map((b, i) => ({ ...b, order: i })),
+          blocks: normalizeBlockLayout(blocks).map((b, i) => ({ ...b, order: i })),
+        },
+        selectedBlockId: newBlock.id,
+      }
+    }),
+
+  addImageBlockFromFile: (file, afterId) => {
+    get().addBlock("custom_image", afterId)
+    const blockId = get().selectedBlockId
+    if (!blockId) return
+
+    void (async () => {
+      try {
+        if (isImageFile(file)) {
+          const previewUrl = await readFileAsDataUrl(file)
+          get().updateBlockContent(blockId, {
+            fileName: file.name,
+            mediaType: "image",
+            previewUrl,
+            placeholder: false,
+          })
+          return
+        }
+
+        if (isPdfFile(file)) {
+          const prepared = await preparePdfUpload(file)
+          set({
+            pendingImagePdfImport: {
+              blockId,
+              fileName: prepared.fileName,
+              pdfDataUrl: prepared.pdfDataUrl,
+              pageCount: prepared.pageCount,
+            },
+          })
+          return
+        }
+
+        get().updateBlockContent(blockId, {
+          uploadError: "Use a PDF or image (PNG, JPG, GIF, WebP).",
+        })
+      } catch {
+        get().updateBlockContent(blockId, {
+          uploadError: "Could not load file. Use a PDF or image (PNG, JPG, GIF, WebP).",
+        })
+      }
+    })()
+  },
+
+  addImageBlockFromFileBeside: (file, blockId) => {
+    get().addBlockBeside(blockId, "custom_image")
+    const selectedId = get().selectedBlockId
+    if (!selectedId) return
+
+    void (async () => {
+      try {
+        if (isImageFile(file)) {
+          const previewUrl = await readFileAsDataUrl(file)
+          get().updateBlockContent(selectedId, {
+            fileName: file.name,
+            mediaType: "image",
+            previewUrl,
+            placeholder: false,
+          })
+          return
+        }
+
+        if (isPdfFile(file)) {
+          const prepared = await preparePdfUpload(file)
+          set({
+            pendingImagePdfImport: {
+              blockId: selectedId,
+              fileName: prepared.fileName,
+              pdfDataUrl: prepared.pdfDataUrl,
+              pageCount: prepared.pageCount,
+            },
+          })
+          return
+        }
+
+        get().updateBlockContent(selectedId, {
+          uploadError: "Use a PDF or image (PNG, JPG, GIF, WebP).",
+        })
+      } catch {
+        get().updateBlockContent(selectedId, {
+          uploadError: "Could not load file. Use a PDF or image (PNG, JPG, GIF, WebP).",
+        })
+      }
+    })()
+  },
+
+  clearPendingImagePdfImport: () => set({ pendingImagePdfImport: null }),
+
+  removeBlock: (blockId) =>
+    set((s) => {
+      if (!s.template || s.editorMode === "sales") return s
+      const blocks = normalizeBlockLayout(
+        s.template.blocks.filter((b) => b.id !== blockId),
+      )
+      return {
+        template: {
+          ...s.template,
+          blocks: blocks.map((b, i) => ({ ...b, order: i })),
         },
         selectedBlockId:
           s.selectedBlockId === blockId ? null : s.selectedBlockId,
       }
     }),
 
-  setBlockVariant: (blockId, variant) =>
-    get().updateBlockField(blockId, "variant", variant),
+  reorderBlocks: (from, to) =>
+    set((s) => {
+      if (!s.template || s.editorMode === "sales") return s
+      const blocks = normalizeBlockLayout(arrayMove(s.template.blocks, from, to))
+      return {
+        template: {
+          ...s.template,
+          blocks: blocks.map((b, i) => ({ ...b, order: i })),
+        },
+      }
+    }),
 
-  setBlockDisplayCondition: (blockId, condition) =>
-    get().updateBlockField(blockId, "displayCondition", condition),
+  setBlockVariant: (blockId, variant) => {
+    if (get().editorMode !== "edit") return
+    get().updateBlockField(blockId, "variant", variant)
+  },
+
+  setBlockDisplayCondition: (blockId, condition) => {
+    if (get().editorMode !== "edit") return
+    get().updateBlockField(blockId, "displayCondition", condition)
+  },
+
+  setBlockLocked: (blockId, locked) => {
+    if (get().editorMode !== "edit") return
+    get().updateBlockField(blockId, "locked", locked)
+  },
 
   cycleBlockVariant: (blockId) => {
+    if (get().editorMode !== "edit") return
     const { template } = get()
     if (!template) return
     const block = template.blocks.find((b) => b.id === blockId)
@@ -569,6 +906,8 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   updateSegment: (blockId, segmentId, patch) =>
     set((s) => {
       if (!s.template) return s
+      const block = findTemplateBlock(s.template, blockId)
+      if (blockLockedInSalesMode(s.editorMode, block)) return s
       return {
         template: {
           ...s.template,
@@ -591,7 +930,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   addSegment: (blockId, segment) =>
     set((s) => {
-      if (!s.template) return s
+      if (!s.template || s.editorMode !== "edit") return s
       return {
         template: {
           ...s.template,
@@ -609,7 +948,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   removeSegment: (blockId, segmentId) =>
     set((s) => {
-      if (!s.template) return s
+      if (!s.template || s.editorMode !== "edit") return s
       return {
         template: {
           ...s.template,
@@ -640,6 +979,8 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       isAgentTyping: true,
     }))
 
+    const delay = text === DEMO_USER_PROMPT ? 1100 : 700
+
     setTimeout(() => {
       const reply = agentReply(text, get, set)
       const assistantMsg: ChatMessage = {
@@ -652,6 +993,6 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
         messages: [...s.messages, assistantMsg],
         isAgentTyping: false,
       }))
-    }, 700)
+    }, delay)
   },
 }))

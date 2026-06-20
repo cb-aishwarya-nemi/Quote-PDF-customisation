@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  @keyframes pill-gradient-shift {
+    0% {
+      background-position: 0% 50%;
+    }
+    100% {
+      background-position: 200% 50%;
+    }
+  }
+
+  .pill-gradient-animate {
+    background-image: linear-gradient(
+      90deg,
+      #eff6ff 0%,
+      #e0f2fe 22%,
+      #dbeafe 50%,
+      #e0f2fe 78%,
+      #eff6ff 100%
+    );
+    background-size: 200% 100%;
+    animation: pill-gradient-shift 2.8s ease-in-out infinite;
+  }
+}
+
 @layer base {
   html,
   body,

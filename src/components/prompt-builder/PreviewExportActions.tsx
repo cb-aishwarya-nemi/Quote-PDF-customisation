@@ -9,9 +9,13 @@ import { useRef, useState, type RefObject } from "react"
 
 type Props = {
   documentRef: RefObject<HTMLDivElement | null>
+  variant?: "inline" | "floating"
 }
 
-export function PreviewExportActions({ documentRef }: Props) {
+export function PreviewExportActions({
+  documentRef,
+  variant = "inline",
+}: Props) {
   const template = usePromptBuilderStore((s) => s.template)
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
   const [busy, setBusy] = useState<"download" | "share" | null>(null)
@@ -74,36 +78,42 @@ export function PreviewExportActions({ documentRef }: Props) {
 
   const disabled = busy !== null
 
+  const iconBtnClass = `inline-flex size-7 items-center justify-center rounded border border-gray-300 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50${
+    variant === "floating" ? " shadow-sm" : ""
+  }`
+
   return (
     <div className="flex shrink-0 items-center gap-2">
-      {status && (
+      {status && variant === "inline" && (
         <span className="hidden text-[10px] text-gray-500 sm:inline">{status}</span>
       )}
       <button
         type="button"
         onClick={() => void handleShare()}
         disabled={disabled}
-        className="flex items-center gap-1.5 rounded border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        className={iconBtnClass}
+        aria-label="Share PDF"
+        title="Share"
       >
         {busy === "share" ? (
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
         ) : (
-          <Share2 className="size-3.5" />
+          <Share2 className="size-3.5" strokeWidth={2} />
         )}
-        Share
       </button>
       <button
         type="button"
         onClick={() => void handleDownload()}
         disabled={disabled}
-        className="flex items-center gap-1.5 rounded bg-blue-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        className={iconBtnClass}
+        aria-label="Download PDF"
+        title="Download PDF"
       >
         {busy === "download" ? (
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
         ) : (
-          <Download className="size-3.5" />
+          <Download className="size-3.5" strokeWidth={2} />
         )}
-        Download PDF
       </button>
     </div>
   )

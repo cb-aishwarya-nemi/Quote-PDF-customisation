@@ -51,12 +51,20 @@ export const DEFAULT_LABELS = {
     amountColumnLabel: "Amount",
     subtotalLabel: "Subtotal",
   },
+  entitlements: {
+    label: "Entitlements & usage",
+    nameColumnLabel: "Entitlement",
+    limitColumnLabel: "Included",
+    notesColumnLabel: "Notes",
+  },
   terms: {
     sectionLabel: "Terms & conditions",
   },
   signature: {
     acceptanceLabel: "Acceptance",
     dateLabel: "Date",
+    customerLabel: "Customer signature",
+    vendorLabel: "Vendor signature",
     footerText:
       "By signing, the customer agrees to the terms and pricing in this quote.",
   },

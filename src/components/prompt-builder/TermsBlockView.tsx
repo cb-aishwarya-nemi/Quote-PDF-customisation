@@ -1,7 +1,7 @@
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
 import { SectionLabel } from "@/components/prompt-builder/EditableLabel"
 import { ConditionalSegmentCard } from "@/components/prompt-builder/ConditionalSegmentCard"
-import { useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
+import { useCanEditBlockStructure, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
 import { createId } from "@/lib/create-id"
 import { DEFAULT_LABELS, staticLabel } from "@/lib/block-static-labels"
 import { createConditionRule } from "@/lib/segment-conditions"
@@ -18,6 +18,7 @@ type Props = {
 
 export function TermsBlockView({ block, onField }: Props) {
   const isPreview = useIsPreviewMode()
+  const canEditStructure = useCanEditBlockStructure()
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
   const updateBlockField = usePromptBuilderStore((s) => s.updateBlockField)
   const setField = onField ?? ((field, value) => updateBlockField(block.id, field, value))
@@ -60,6 +61,7 @@ export function TermsBlockView({ block, onField }: Props) {
   return (
     <div className="space-y-2">
       <SectionLabel
+        blockId={block.id}
         value={sectionLabel}
         onChange={(v) => setField("sectionLabel", v)}
         className={variant === "legal" ? "text-[9px] tracking-widest" : ""}
@@ -74,11 +76,13 @@ export function TermsBlockView({ block, onField }: Props) {
           ) : (
             <>
               <InlineEditable
+                blockId={block.id}
                 value={String(c.emptyHint ?? "No terms content yet.")}
                 onChange={(v) => setField("emptyHint", v)}
                 className="text-[12px] text-gray-500"
               />
               <InlineEditable
+                blockId={block.id}
                 value={String(
                   c.emptySubhint ??
                     "Add paragraphs — optionally scoped to region or payment terms.",
@@ -125,7 +129,7 @@ export function TermsBlockView({ block, onField }: Props) {
         </div>
       )}
 
-      {!isPreview && (
+      {canEditStructure && (
       <div ref={menuRef} className="relative pt-1">
         <button
           type="button"

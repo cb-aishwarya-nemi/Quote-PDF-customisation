@@ -91,6 +91,28 @@ export const BLOCK_VARIANTS: Record<BuilderBlockType, BlockVariantOption[]> = {
       label: "Quote style",
       description: "Dotted leaders between item and amount",
     },
+    {
+      id: "with_descriptions",
+      label: "With descriptions",
+      description: "Item name with a description line under each row",
+    },
+  ],
+  entitlements: [
+    {
+      id: "table",
+      label: "Table",
+      description: "Entitlement, limit, and usage notes in columns",
+    },
+    {
+      id: "list",
+      label: "Narrative list",
+      description: "Stacked explainer bullets for white-glove deals",
+    },
+    {
+      id: "compact",
+      label: "Compact strip",
+      description: "Name and limit only — for short add-on quotes",
+    },
   ],
   terms: [
     {
@@ -162,6 +184,11 @@ export const BLOCK_VARIANTS: Record<BuilderBlockType, BlockVariantOption[]> = {
   ],
   signature: [
     {
+      id: "dual_party",
+      label: "Dual-party",
+      description: "Customer and vendor countersignature lines",
+    },
+    {
       id: "dual",
       label: "Dual line",
       description: "Signature and date side by side",
@@ -173,8 +200,8 @@ export const BLOCK_VARIANTS: Record<BuilderBlockType, BlockVariantOption[]> = {
     },
     {
       id: "boxed",
-      label: "Boxed",
-      description: "Signature inside a formal bordered box",
+      label: "Order form",
+      description: "Boxed acceptance with legal acknowledgment line",
     },
   ],
   ae_profile: [
@@ -206,6 +233,7 @@ export const ADDABLE_BLOCKS: {
   { type: "billed_to", label: "Billed to", group: "standard" },
   { type: "contract_details", label: "Contract details", group: "standard" },
   { type: "pricing", label: "Pricing table", group: "standard" },
+  { type: "entitlements", label: "Entitlements", group: "standard" },
   { type: "terms", label: "Terms & conditions", group: "standard" },
   { type: "custom_text", label: "Text", group: "custom" },
   { type: "custom_table", label: "Table", group: "custom" },
@@ -221,5 +249,31 @@ export function getVariantLabel(
   const variants = BLOCK_VARIANTS[type]
   return (
     variants.find((v) => v.id === variantId)?.label ?? variants[0]?.label ?? "Classic"
+  )
+}
+
+export const LOGO_VARIANTS: BlockVariantOption[] = [
+  {
+    id: "default",
+    label: "Default",
+    description: "Standard logo size",
+  },
+  {
+    id: "wide",
+    label: "Wide",
+    description: "Wider logo area for horizontal marks",
+  },
+  {
+    id: "compact",
+    label: "Compact",
+    description: "Smaller logo mark",
+  },
+]
+
+export function getLogoVariantLabel(variantId?: string): string {
+  return (
+    LOGO_VARIANTS.find((v) => v.id === variantId)?.label ??
+    LOGO_VARIANTS[0]?.label ??
+    "Default"
   )
 }

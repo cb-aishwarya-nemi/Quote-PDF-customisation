@@ -25,6 +25,7 @@ export type BuilderBlockType =
   | "billed_to"
   | "contract_details"
   | "pricing"
+  | "entitlements"
   | "terms"
   | "custom_text"
   | "custom_table"
@@ -82,60 +83,135 @@ export type ChatMessage = {
   timestamp: string
 }
 
-export const PREVIEW_SCENARIOS: PreviewScenario[] = [
+export type DealType = "new_business" | "expansion" | "amendment" | "termination"
+
+export const DEAL_TYPE_LABELS: Record<DealType, string> = {
+  new_business: "New business",
+  expansion: "Expansion",
+  amendment: "Amendment",
+  termination: "Termination",
+}
+
+export type PreviewScenarioGroup = {
+  id: DealType
+  label: string
+  scenarios: PreviewScenario[]
+}
+
+export const PREVIEW_SCENARIO_GROUPS: PreviewScenarioGroup[] = [
   {
-    id: "us",
-    label: "US · Net-30",
-    values: {
-      customer_region: "US",
-      payment_terms: "Net-30",
-      item_type: "software",
-      item_name: "Enterprise Platform",
-      metered: "false",
-      quantity: "10+",
-      frequency: "annual",
-    },
+    id: "new_business",
+    label: "New business",
+    scenarios: [
+      {
+        id: "new-us",
+        label: "US · Net-30",
+        values: {
+          deal_type: "new_business",
+          customer_region: "US",
+          payment_terms: "Net-30",
+          item_type: "software",
+          item_name: "Enterprise Platform",
+          metered: "false",
+          quantity: "10+",
+          frequency: "annual",
+        },
+      },
+      {
+        id: "new-de",
+        label: "Germany · EU",
+        values: {
+          deal_type: "new_business",
+          customer_region: "DE",
+          payment_terms: "Net-30",
+          item_type: "service",
+          item_name: "Implementation services",
+          metered: "false",
+          quantity: "1",
+          frequency: "one_time",
+        },
+      },
+      {
+        id: "new-apac",
+        label: "APAC · Prepaid",
+        values: {
+          deal_type: "new_business",
+          customer_region: "APAC",
+          payment_terms: "Prepaid",
+          item_type: "usage",
+          item_name: "Premium Support",
+          metered: "true",
+          quantity: "5",
+          frequency: "monthly",
+        },
+      },
+    ],
   },
   {
-    id: "de",
-    label: "Germany · EU",
-    values: {
-      customer_region: "DE",
-      payment_terms: "Net-30",
-      item_type: "service",
-      item_name: "Implementation services",
-      metered: "false",
-      quantity: "1",
-      frequency: "one_time",
-    },
+    id: "expansion",
+    label: "Expansion",
+    scenarios: [
+      {
+        id: "exp-eu",
+        label: "EU · Co-term add-on",
+        values: {
+          deal_type: "expansion",
+          customer_region: "EU",
+          payment_terms: "Net-30",
+          item_type: "software",
+          item_name: "Enterprise Platform",
+          metered: "true",
+          quantity: "100+",
+          frequency: "annual",
+        },
+      },
+    ],
   },
   {
-    id: "eu",
-    label: "EU · Annual",
-    values: {
-      customer_region: "EU",
-      payment_terms: "Net-30",
-      item_type: "software",
-      item_name: "Enterprise Platform",
-      metered: "true",
-      quantity: "100+",
-      frequency: "annual",
-    },
+    id: "amendment",
+    label: "Amendment",
+    scenarios: [
+      {
+        id: "amend-us",
+        label: "US · Contract change",
+        values: {
+          deal_type: "amendment",
+          customer_region: "US",
+          payment_terms: "Net-30",
+          item_type: "software",
+          item_name: "Enterprise Platform",
+          metered: "false",
+          quantity: "10+",
+          frequency: "annual",
+        },
+      },
+    ],
   },
   {
-    id: "apac",
-    label: "APAC · Prepaid",
-    values: {
-      customer_region: "APAC",
-      payment_terms: "Prepaid",
-      item_type: "usage",
-      item_name: "Premium Support",
-      metered: "true",
-      quantity: "5",
-      frequency: "monthly",
-    },
+    id: "termination",
+    label: "Termination",
+    scenarios: [
+      {
+        id: "term-us",
+        label: "US · Wind-down",
+        values: {
+          deal_type: "termination",
+          customer_region: "US",
+          payment_terms: "Net-30",
+          item_type: "software",
+          item_name: "Enterprise Platform",
+          metered: "false",
+          quantity: "1",
+          frequency: "annual",
+        },
+      },
+    ],
   },
 ]
+
+/** @deprecated Use PREVIEW_SCENARIO_GROUPS — flat list kept for store init and lookups */
+export const PREVIEW_SCENARIOS: PreviewScenario[] =
+  PREVIEW_SCENARIO_GROUPS.flatMap((g) => g.scenarios)
 
 import { normalizeConditionRules } from "@/lib/segment-conditions"
 

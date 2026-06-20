@@ -45,10 +45,11 @@ export function ContractDetailsView({ block, onField }: Props) {
               />
               <div className="min-w-0 flex-1">
                 <SectionLabel
+                  blockId={block.id}
                   value={fieldLabel(key)}
                   onChange={(v) => updateFieldLabel(key, v)}
                 />
-                <VariableField
+                <VariableField blockId={block.id}
                   blockType="contract_details"
                   field={key}
                   value={String(c[key] ?? "")}
@@ -73,13 +74,14 @@ export function ContractDetailsView({ block, onField }: Props) {
           >
             <dt>
               <EditableLabel
+                blockId={block.id}
                 value={fieldLabel(key)}
                 onChange={(v) => updateFieldLabel(key, v)}
                 className="text-gray-500"
               />
             </dt>
             <dd className="min-w-[8rem] flex-1 text-right">
-              <VariableField
+              <VariableField blockId={block.id}
                 blockType="contract_details"
                 field={key}
                 value={String(c[key] ?? "")}
@@ -98,11 +100,12 @@ export function ContractDetailsView({ block, onField }: Props) {
       {FIELDS.map((key) => (
         <div key={key}>
           <SectionLabel
+            blockId={block.id}
             value={fieldLabel(key)}
             onChange={(v) => updateFieldLabel(key, v)}
             className="text-[10px] font-medium"
           />
-          <VariableField
+          <VariableField blockId={block.id}
             blockType="contract_details"
             field={key}
             value={String(c[key] ?? "")}

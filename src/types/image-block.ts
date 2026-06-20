@@ -1,5 +1,8 @@
 export type ImageBlockMediaType = "image" | "pdf"
 
+export const IMAGE_BLOCK_ACCEPT =
+  ".pdf,application/pdf,image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+
 export type ImageTextOverlayAlign = "left" | "center" | "right"
 
 export type ImageTextOverlayStyle = "light" | "dark" | "pill"

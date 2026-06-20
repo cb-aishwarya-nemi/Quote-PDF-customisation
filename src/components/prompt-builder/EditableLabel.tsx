@@ -5,6 +5,7 @@ type Props = {
   onChange: (value: string) => void
   className?: string
   as?: "inline" | "block"
+  blockId?: string
 }
 
 export function EditableLabel({
@@ -12,14 +13,14 @@ export function EditableLabel({
   onChange,
   className = "",
   as = "inline",
+  blockId,
 }: Props) {
   return (
     <InlineEditable
       value={value}
       onChange={onChange}
-      className={`outline-none focus:rounded focus:bg-blue-50/50 focus:ring-1 focus:ring-blue-200 ${
-        as === "block" ? "block" : "inline"
-      } ${className}`}
+      blockId={blockId}
+      className={`${as === "block" ? "block" : "inline"} ${className}`}
     />
   )
 }
@@ -28,11 +29,13 @@ export function SectionLabel({
   value,
   onChange,
   className = "",
+  blockId,
 }: Omit<Props, "as">) {
   return (
     <EditableLabel
       value={value}
       onChange={onChange}
+      blockId={blockId}
       as="block"
       className={`text-[10px] font-semibold uppercase tracking-wider text-gray-400 ${className}`}
     />
