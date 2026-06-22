@@ -68,8 +68,8 @@ export function AeProfileView({ block, onField }: Props) {
 
   if (variant === "inline") {
     return (
-      <div className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
           <User className="size-4 text-gray-500" />
         </div>
         <div className="min-w-0 flex-1 text-[12px]">
@@ -101,7 +101,7 @@ export function AeProfileView({ block, onField }: Props) {
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="flex items-start gap-3">
       <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gray-100 to-gray-200">
         <User className="size-5 text-gray-500" />
       </div>
@@ -128,6 +128,7 @@ export function AeProfileView({ block, onField }: Props) {
               field="email"
               value={String(c.email ?? "")}
               onChange={(v) => onField("email", v)}
+              layout="inline"
               className="text-blue-600"
             />
           </div>
@@ -138,6 +139,7 @@ export function AeProfileView({ block, onField }: Props) {
               field="phone"
               value={String(c.phone ?? "")}
               onChange={(v) => onField("phone", v)}
+              layout="inline"
               className="text-gray-500"
             />
           </div>

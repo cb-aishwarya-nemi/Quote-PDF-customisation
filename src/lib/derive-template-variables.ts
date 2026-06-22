@@ -147,7 +147,7 @@ export function getVariableDef(
 
 export function getPricingRowVariableDef(
   index: number,
-  part: "item" | "amount" | "description",
+  part: "item" | "amount",
 ): FieldDef {
   if (part === "item") {
     return {
@@ -157,19 +157,39 @@ export function getPricingRowVariableDef(
       category: "pricing",
     }
   }
-  if (part === "description") {
-    return {
-      field: `rows[${index}].description`,
-      key: `quote.line_items[${index}].description`,
-      label: `Line item ${index + 1} description`,
-      category: "pricing",
-    }
-  }
   return {
     field: `rows[${index}].amount`,
     key: `quote.line_items[${index}].amount`,
     label: `Line item ${index + 1} amount`,
     category: "pricing",
+  }
+}
+
+export function getEntitlementRowVariableDef(
+  index: number,
+  part: "name" | "limit" | "notes",
+): FieldDef {
+  if (part === "name") {
+    return {
+      field: `rows[${index}].name`,
+      key: `quote.entitlements[${index}].name`,
+      label: `Entitlement ${index + 1}`,
+      category: "quote",
+    }
+  }
+  if (part === "limit") {
+    return {
+      field: `rows[${index}].limit`,
+      key: `quote.entitlements[${index}].limit`,
+      label: `Entitlement ${index + 1} limit`,
+      category: "quote",
+    }
+  }
+  return {
+    field: `rows[${index}].notes`,
+    key: `quote.entitlements[${index}].notes`,
+    label: `Entitlement ${index + 1} notes`,
+    category: "quote",
   }
 }
 
@@ -223,7 +243,6 @@ export function getVariableCatalog(): VariableCatalogEntry[] {
   for (let i = 0; i < 8; i++) {
     const nameKey = `quote.line_items[${i}].name`
     const amountKey = `quote.line_items[${i}].amount`
-    const descriptionKey = `quote.line_items[${i}].description`
     if (!seen.has(nameKey)) {
       seen.add(nameKey)
       list.push({ key: nameKey, label: `Line item ${i + 1}`, category: "pricing" })
@@ -236,13 +255,19 @@ export function getVariableCatalog(): VariableCatalogEntry[] {
         category: "pricing",
       })
     }
-    if (!seen.has(descriptionKey)) {
-      seen.add(descriptionKey)
-      list.push({
-        key: descriptionKey,
-        label: `Line item ${i + 1} description`,
-        category: "pricing",
-      })
+  }
+
+  for (let i = 0; i < 8; i++) {
+    for (const [suffix, label] of [
+      ["name", `Entitlement ${i + 1}`],
+      ["limit", `Entitlement ${i + 1} limit`],
+      ["notes", `Entitlement ${i + 1} notes`],
+    ] as const) {
+      const key = `quote.entitlements[${i}].${suffix}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        list.push({ key, label, category: "quote" })
+      }
     }
   }
 
@@ -354,6 +379,22 @@ export function deriveTemplateVariables(
   const variables: TemplateVariable[] = []
   const seen = new Set<string>()
 
+  normalizeConditionRules(template.displayCondition ?? null).forEach(
+    (rule, ruleIndex) => {
+      pushUnique(variables, seen, {
+        id: `template:condition-${ruleIndex}`,
+        key: `deal.${rule.field}`,
+        label: `Template — ${describeConditionRule(rule)}`,
+        category: "routing",
+        blockId: template.id,
+        blockType: "quote_summary_header",
+        blockLabel: "Template",
+        field: `displayCondition[${ruleIndex}]`,
+        sampleValue: `${rule.field} ${rule.operator} ${rule.value}`,
+      })
+    },
+  )
+
   for (const block of template.blocks) {
     const blockLabel = BLOCK_TYPE_LABELS[block.type]
     const defs = BLOCK_FIELD_DEFS[block.type] ?? []
@@ -389,7 +430,6 @@ export function deriveTemplateVariables(
       rows.forEach((row, index) => {
         const itemField = `rows[${index}].item`
         const amountField = `rows[${index}].amount`
-        const descriptionField = `rows[${index}].description`
         if (row.item && !isVariableRemoved(block.content, itemField)) {
           const baseDef = getPricingRowVariableDef(index, "item")
           const resolved = resolveVariableDef(
@@ -428,29 +468,6 @@ export function deriveTemplateVariables(
             blockLabel,
             field: baseDef.field,
             sampleValue: row.amount,
-          })
-        }
-        if (
-          row.description &&
-          !isVariableRemoved(block.content, descriptionField)
-        ) {
-          const baseDef = getPricingRowVariableDef(index, "description")
-          const resolved = resolveVariableDef(
-            block.type,
-            baseDef.field,
-            block.content,
-            baseDef,
-          )!
-          pushUnique(variables, seen, {
-            id: `${block.id}:row-${index}-description`,
-            key: resolved.key,
-            label: resolved.label,
-            category: resolved.category,
-            blockId: block.id,
-            blockType: block.type,
-            blockLabel,
-            field: baseDef.field,
-            sampleValue: row.description,
           })
         }
       })
@@ -543,7 +560,7 @@ export function buildVariablesWelcomeMessage(
     .map((v) => v.label)
     .join(", ")
 
-  return `I've scanned your template and identified ${count} variables that will be populated from quote and customer data at send time${highlights ? ` — including ${highlights}` : ""}. See the list above. Ask me to explain any variable or add conditions.`
+  return `I've scanned your template and found ${count} fields that will pull live data when a quote is sent${highlights ? ` — including ${highlights}` : ""}. Ask me to list them or explain any mapping.`
 }
 
 export function formatVariablesListReply(
@@ -551,7 +568,7 @@ export function formatVariablesListReply(
 ): string {
   const variables = deriveTemplateVariables(template)
   if (variables.length === 0) {
-    return "No variables detected yet. Add standard blocks like Quote summary or Billed to and I'll map the fields automatically."
+    return "No merge fields detected yet. Add standard blocks like Quote summary or Billed to and I'll map the fields automatically."
   }
 
   const byCategory = variables.reduce(
@@ -569,19 +586,17 @@ export function formatVariablesListReply(
     contract: "Contract",
     pricing: "Pricing",
     people: "People",
-    routing: "Routing / conditions",
+    routing: "Conditions",
     custom: "Custom",
   }
 
   const lines = Object.entries(byCategory).map(([cat, vars]) => {
     const heading = categoryLabels[cat as TemplateVariableCategory] ?? cat
-    const items = vars
-      .map((v) => `• ${v.label} ({{${v.key}}}) — e.g. "${v.sampleValue}"`)
-      .join("\n")
+    const items = vars.map((v) => `  ${v.label} · ${v.sampleValue}`).join("\n")
     return `${heading}\n${items}`
   })
 
-  return `Here are the ${variables.length} variables I found in your template:\n\n${lines.join("\n\n")}`
+  return `These ${variables.length} fields pull live data at send time. Preview shows sample values:\n\n${lines.join("\n\n")}`
 }
 
 export { BLOCK_TYPE_LABELS }

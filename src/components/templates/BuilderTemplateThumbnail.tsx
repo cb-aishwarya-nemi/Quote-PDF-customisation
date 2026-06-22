@@ -54,16 +54,26 @@ function MiniBlock({
 type Props = {
   template: BuilderTemplate
   compact?: boolean
+  /** Fill parent preview area on template cards */
+  fill?: boolean
 }
 
-export function BuilderTemplateThumbnail({ template, compact }: Props) {
+export function BuilderTemplateThumbnail({ template, compact, fill }: Props) {
   const previewBlocks = template.blocks.slice(0, compact ? 4 : 5)
   const remaining = template.blocks.length - previewBlocks.length
 
   if (compact) {
     return (
-      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-b from-[#eef0f3] to-[#e4e7eb] p-4">
-        <div className="flex h-full w-full max-w-[132px] flex-col overflow-hidden rounded-lg border border-gray-200/90 bg-white shadow-[0_8px_24px_-12px_rgba(15,23,42,0.22)]">
+      <div
+        className={`flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-b from-[#eef0f3] to-[#e4e7eb] ${
+          fill ? "p-3" : "rounded-xl p-4"
+        }`}
+      >
+        <div
+          className={`flex h-full max-h-full w-full flex-col overflow-hidden border border-gray-200/90 bg-white shadow-[0_8px_24px_-12px_rgba(15,23,42,0.22)] ${
+            fill ? "max-w-[46%] rounded-md" : "max-w-[132px] rounded-lg"
+          }`}
+        >
           <div className="border-b border-gray-100 bg-gray-50/80 px-2 py-1">
             <div className="h-0.5 w-8 rounded-full bg-gray-300" />
           </div>

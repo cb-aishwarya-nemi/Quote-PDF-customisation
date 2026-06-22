@@ -2,17 +2,14 @@ import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { useEffect, useRef, useState } from "react"
 
-const AUTOSAVE_DELAY_MS = 800
+const AUTOSAVE_DELAY_MS = 3000
 
 /** Survives StrictMode remounts so the first save isn't lost. */
 const lastPersistedAtByTemplateId = new Map<string, string>()
 
-export type AutosaveStatus = "idle" | "saving" | "saved"
-
 export function useBuilderAutosave() {
   const templateId = usePromptBuilderStore((s) => s.template?.id ?? null)
 
-  const [status, setStatus] = useState<AutosaveStatus>("idle")
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
 
   const debounceRef = useRef<number>()
@@ -20,7 +17,6 @@ export function useBuilderAutosave() {
 
   useEffect(() => {
     if (!templateId) {
-      setStatus("idle")
       setLastSavedAt(null)
       return
     }
@@ -45,32 +41,28 @@ export function useBuilderAutosave() {
         .saveBuilderTemplateDraft(current)
       lastPersistedAtByTemplateId.set(templateId, record.updatedAt)
       setLastSavedAt(record.updatedAt)
-      setStatus("saved")
     }
 
-    const scheduleSave = (debounced: boolean) => {
+    const scheduleSave = (immediate = false) => {
       const current = usePromptBuilderStore.getState().template
       if (!current || current.id !== templateId) return
 
       window.clearTimeout(debounceRef.current)
 
-      if (!debounced) {
-        setStatus("saving")
+      if (immediate) {
         commitSave()
         skipNextChangeRef.current = true
         return
       }
 
-      setStatus("saving")
       debounceRef.current = window.setTimeout(commitSave, AUTOSAVE_DELAY_MS)
     }
 
     const existingSavedAt = hydrateSavedAt()
     if (existingSavedAt) {
       setLastSavedAt(existingSavedAt)
-      setStatus("saved")
     } else {
-      scheduleSave(false)
+      scheduleSave(true)
     }
 
     const unsubscribe = usePromptBuilderStore.subscribe((state, prevState) => {
@@ -82,7 +74,7 @@ export function useBuilderAutosave() {
         return
       }
 
-      scheduleSave(true)
+      scheduleSave()
     })
 
     return () => {
@@ -91,5 +83,5 @@ export function useBuilderAutosave() {
     }
   }, [templateId])
 
-  return { status, lastSavedAt, visible: !!templateId }
+  return { lastSavedAt, visible: !!templateId }
 }

@@ -1,4 +1,5 @@
 import { EditableLabel, SectionLabel } from "@/components/prompt-builder/EditableLabel"
+import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
 import { VariableField } from "@/components/prompt-builder/VariableField"
 import { getPricingRowVariableDef } from "@/lib/derive-template-variables"
 import { DEFAULT_LABELS, staticLabel } from "@/lib/block-static-labels"
@@ -212,14 +213,12 @@ export function PricingTableView({ block, onField }: Props) {
                     onChange={(v) => updateRow(i, "item", v)}
                     className="font-medium text-gray-900"
                   />
-                  <VariableField
+                  <InlineEditable
                     blockId={block.id}
-                    blockType="pricing"
-                    field={`rows[${i}].description`}
-                    variableDef={getPricingRowVariableDef(i, "description")}
                     value={row.description ?? ""}
                     onChange={(v) => updateRow(i, "description", v)}
                     multiline
+                    placeholder="Add a line item description"
                     className="mt-1 text-[11px] leading-relaxed text-gray-500"
                   />
                 </td>

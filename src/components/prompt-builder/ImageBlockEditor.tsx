@@ -4,7 +4,7 @@ import {
   ImageWithOverlays,
   createDefaultOverlay,
 } from "@/components/prompt-builder/ImageWithOverlays"
-import { useCanEditBlockContent, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
+import { useCanEditBlockContent, useIsAdminPreview } from "@/hooks/use-builder-editor-mode"
 import {
   isImageFile,
   isPdfFile,
@@ -47,9 +47,9 @@ type Props = {
 }
 
 export function ImageBlockEditor({ blockId, content: raw, caption }: Props) {
-  const isPreview = useIsPreviewMode()
+  const isAdminPreview = useIsAdminPreview()
   const canEdit = useCanEditBlockContent(blockId)
-  const isReadOnly = isPreview || !canEdit
+  const isReadOnly = isAdminPreview || !canEdit
   const updateBlockContent = usePromptBuilderStore((s) => s.updateBlockContent)
   const pendingImagePdfImport = usePromptBuilderStore(
     (s) => s.pendingImagePdfImport,

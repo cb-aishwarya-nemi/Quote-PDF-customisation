@@ -1,7 +1,12 @@
 import { createId } from "@/lib/create-id"
 import { deriveTemplateStats } from "@/lib/derive-template-stats"
+import {
+  deriveMockTemplateOwner,
+  deriveTemplateDealTypes,
+} from "@/lib/derive-template-library-meta"
 import { mockVariants, type GeneratedVariant } from "@/mock/data"
 import type { BuilderTemplate } from "@/types/prompt-builder"
+import type { DealType } from "@/types/prompt-builder"
 import type { TemplateStatus } from "@/types/template"
 import { create } from "zustand"
 
@@ -21,6 +26,9 @@ export type PublishedBuilderTemplate = {
   variableCount: number
   conditionCount: number
   variantId?: string
+  dealTypes: DealType[]
+  ownerId: string
+  ownerName: string
 }
 
 type TemplateLibraryStore = {
@@ -32,6 +40,9 @@ type TemplateLibraryStore = {
   saveBuilderTemplateDraft: (template: BuilderTemplate) => PublishedBuilderTemplate
   publishBuilderTemplate: (template: BuilderTemplate) => PublishedBuilderTemplate
   duplicateBuilderTemplate: (id: string) => PublishedBuilderTemplate | undefined
+  duplicatePublishedRecord: (
+    source: PublishedBuilderTemplate,
+  ) => PublishedBuilderTemplate
   publishGeneratedTemplate: (input: {
     variantId: string
     builderTemplateId: string
@@ -62,6 +73,9 @@ function upsertBuilderTemplateRecord(
     ...template,
     name: template.name.trim() || "Untitled template",
   })
+  const owner = existing
+    ? { id: existing.ownerId, name: existing.ownerName }
+    : deriveMockTemplateOwner(snapshot.id)
 
   return {
     id: snapshot.id,
@@ -74,6 +88,37 @@ function upsertBuilderTemplateRecord(
     variableCount: stats.variableCount,
     conditionCount: stats.conditionCount,
     variantId: snapshot.variantId,
+    dealTypes: deriveTemplateDealTypes(snapshot),
+    ownerId: owner.id,
+    ownerName: owner.name,
+  }
+}
+
+function duplicatePublishedRecordFromSource(
+  source: PublishedBuilderTemplate,
+): PublishedBuilderTemplate {
+  const snapshot = cloneTemplate(source.template)
+  snapshot.id = createId("tpl")
+  snapshot.name = `${source.name} copy`
+
+  const stats = deriveTemplateStats(snapshot)
+  const now = new Date().toISOString()
+  const owner = deriveMockTemplateOwner(snapshot.id)
+
+  return {
+    id: snapshot.id,
+    name: snapshot.name,
+    status: "draft",
+    template: snapshot,
+    updatedAt: now,
+    publishedAt: now,
+    quotesSent: stats.quotesSent,
+    variableCount: stats.variableCount,
+    conditionCount: stats.conditionCount,
+    variantId: snapshot.variantId,
+    dealTypes: deriveTemplateDealTypes(snapshot),
+    ownerId: owner.id,
+    ownerName: owner.name,
   }
 }
 
@@ -148,25 +193,18 @@ export const useTemplateLibraryStore = create<TemplateLibraryStore>((set, get) =
     const source = get().publishedTemplates.find((entry) => entry.id === id)
     if (!source) return undefined
 
-    const snapshot = cloneTemplate(source.template)
-    snapshot.id = createId("tpl")
-    snapshot.name = `${source.name} copy`
+    const record = duplicatePublishedRecordFromSource(source)
 
-    const stats = deriveTemplateStats(snapshot)
-    const now = new Date().toISOString()
+    set((s) => ({
+      publishedTemplates: [record, ...s.publishedTemplates],
+    }))
 
-    const record: PublishedBuilderTemplate = {
-      id: snapshot.id,
-      name: snapshot.name,
-      status: "draft",
-      template: snapshot,
-      updatedAt: now,
-      publishedAt: now,
-      quotesSent: stats.quotesSent,
-      variableCount: stats.variableCount,
-      conditionCount: stats.conditionCount,
-      variantId: snapshot.variantId,
-    }
+    return record
+  },
+
+  duplicatePublishedRecord: (source) => {
+    get().ensureInitialized()
+    const record = duplicatePublishedRecordFromSource(source)
 
     set((s) => ({
       publishedTemplates: [record, ...s.publishedTemplates],

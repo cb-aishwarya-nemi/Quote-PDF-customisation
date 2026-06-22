@@ -4,6 +4,7 @@ import { PromptBuilderHeader } from "@/components/prompt-builder/PromptBuilderHe
 import { PromptBuilderSkeleton } from "@/components/prompt-builder/PromptBuilderSkeleton"
 import { createBuilderTemplate } from "@/lib/create-builder-template"
 import type { BuilderNavigationState } from "@/lib/navigate-to-builder"
+import { applyCreationContextToTemplate } from "@/lib/derive-template-from-creation"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { useEffect, useLayoutEffect, useState } from "react"
@@ -28,9 +29,13 @@ export function PromptBuilderPage() {
 
     useTemplateLibraryStore.getState().ensureInitialized()
 
-    const generationOptions = navState?.generationStepLabels?.length
-      ? { generationStepLabels: navState.generationStepLabels }
-      : undefined
+    const generationOptions =
+      navState?.generationStepLabels?.length || navState?.creationBrief
+        ? {
+            generationStepLabels: navState.generationStepLabels,
+            creationBrief: navState.creationBrief,
+          }
+        : undefined
 
     if (navState?.template?.id === templateId) {
       initTemplate(navState.template, generationOptions)
@@ -46,11 +51,17 @@ export function PromptBuilderPage() {
     }
 
     initTemplate(
-      createBuilderTemplate(templateId, {
-        variantId: navState?.variantId,
-        presetId: navState?.presetId,
-        name: navState?.name ?? navState?.variantName,
-      }),
+      applyCreationContextToTemplate(
+        createBuilderTemplate(templateId, {
+          variantId: navState?.variantId,
+          presetId: navState?.presetId,
+          name: navState?.name ?? navState?.variantName,
+        }),
+        {
+          creationBrief: navState?.creationBrief,
+          uploadedFileNames: navState?.uploadedFileNames,
+        },
+      ),
       generationOptions,
     )
   }, [
@@ -65,6 +76,8 @@ export function PromptBuilderPage() {
     navState?.name,
     navState?.variantName,
     navState?.generationStepLabels,
+    navState?.creationBrief,
+    navState?.uploadedFileNames,
   ])
 
   useEffect(() => {

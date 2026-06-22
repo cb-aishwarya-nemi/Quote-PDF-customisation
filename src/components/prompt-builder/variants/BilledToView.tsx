@@ -36,6 +36,7 @@ function ContactFields({
         field="contact"
         value={String(c.contact ?? "")}
         onChange={(v) => onField("contact", v)}
+        layout="inline"
         className="mt-0.5 text-[12px] text-blue-600"
       />
     </>
@@ -73,6 +74,7 @@ export function BilledToView({ block, onField }: Props) {
             value={String(c.address ?? "")}
             onChange={(v) => onField("address", v)}
             multiline
+            hugContents
             className="mt-2 text-[12px] leading-relaxed text-gray-600"
           />
         </div>
@@ -125,6 +127,7 @@ export function BilledToView({ block, onField }: Props) {
                   value={String(c.address ?? "")}
                   onChange={(v) => onField("address", v)}
                   multiline
+                  hugContents
                   className="text-[12px] leading-relaxed text-gray-600"
                 />
               </div>
@@ -163,6 +166,7 @@ export function BilledToView({ block, onField }: Props) {
           field="contact"
           value={String(c.contact ?? "")}
           onChange={(v) => onField("contact", v)}
+          layout="inline"
           className="text-[12px] text-blue-600"
         />
       </div>
@@ -172,6 +176,7 @@ export function BilledToView({ block, onField }: Props) {
         value={String(c.address ?? "")}
         onChange={(v) => onField("address", v)}
         multiline
+        hugContents
         className="mt-2 text-[12px] leading-relaxed text-gray-600"
       />
     </div>

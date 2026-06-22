@@ -4,11 +4,15 @@ export default {
   theme: {
     extend: {
       colors: {
+        grey: {
+          50: "#f9fafb",
+          100: "#f3f4f6",
+        },
         cb: {
-          sidebar: "#1a2533",
-          "sidebar-hover": "#243041",
-          "sidebar-active": "#2d3a4d",
-          orange: "#ff6b35",
+          orange: "#ff3300",
+          "orange-light": "#fff4ef",
+          navy: "#0e1c26",
+          "site-switcher": "#eceef1",
           "test-banner": "#fff8e6",
           "test-banner-text": "#7a5c00",
           "test-badge": "#f5c518",
@@ -27,6 +31,7 @@ export default {
           "Roboto",
           "sans-serif",
         ],
+        sora: ["Sora", "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },

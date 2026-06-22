@@ -1,6 +1,6 @@
 import { ConditionBuilderPanel } from "@/components/prompt-builder/ConditionBuilderPanel"
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
-import { useCanEditBlockContent, useCanEditBlockStructure, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
+import { useCanEditBlockContent, useCanEditBlockStructure, useIsAdminPreview, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
 import {
   describeConditionRulesShort,
   hasConditions,
@@ -26,6 +26,7 @@ export function ConditionalSegmentCard({
   variant = "standard",
 }: Props) {
   const isPreview = useIsPreviewMode()
+  const isAdminPreview = useIsAdminPreview()
   const canEdit = useCanEditBlockContent(blockId)
   const canEditStructure = useCanEditBlockStructure()
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
@@ -57,7 +58,7 @@ export function ConditionalSegmentCard({
 
   if (isPreview && !visible) return null
 
-  if (isPreview) {
+  if (isAdminPreview) {
     return (
       <div
         className={`leading-relaxed text-gray-700 ${

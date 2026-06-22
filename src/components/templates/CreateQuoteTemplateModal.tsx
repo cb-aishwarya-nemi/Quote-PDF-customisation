@@ -18,7 +18,7 @@ import { useRef, useState } from "react"
 const CONFIDENCE_CARDS = [
   {
     icon: Palette,
-    title: "Your branding, reflected",
+    title: "Looks and feels like your brand",
     description: "Logo, colors, and typography applied from your assets.",
   },
   {
@@ -102,24 +102,24 @@ export function CreateQuoteTemplateModal({
             </span>
 
             <h2 className="mt-3 text-[20px] font-semibold leading-snug text-gray-900">
-              Create quote template
+              Let's build your first template
             </h2>
             <p className="mt-1.5 max-w-lg text-[13px] leading-relaxed text-gray-500">
-              Built on patterns from thousands of high-converting quotes. Refine
-              everything in the studio later.
+              Built from proven quote patterns and tailored to your business.
+              You can update it anytime.
             </p>
 
-            <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {CONFIDENCE_CARDS.map(({ icon: Icon, title, description }) => (
                 <div
                   key={title}
-                  className="flex gap-3 rounded-xl border border-gray-200 bg-white p-3.5"
+                  className="flex gap-2.5 rounded-lg border border-gray-100 bg-gray-50/40 px-3 py-2.5"
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 ring-1 ring-gray-100">
-                    <Icon className="size-4 text-gray-600" strokeWidth={1.75} />
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-white/70">
+                    <Icon className="size-3.5 text-gray-400" strokeWidth={1.5} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-gray-900">
+                    <p className="text-[12px] font-medium text-gray-700">
                       {title}
                     </p>
                     <p className="mt-0.5 text-[11px] leading-snug text-gray-500">
@@ -132,8 +132,8 @@ export function CreateQuoteTemplateModal({
 
             <div className="mt-6 border-t border-gray-100 pt-5">
               <div className="flex items-center gap-2">
-                <h3 className="text-[14px] font-semibold text-gray-900">
-                  Make it yours
+                <h3 className="text-[12px] font-medium text-gray-600">
+                  Add your assets
                 </h3>
                 <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
                   Optional
@@ -167,8 +167,8 @@ export function CreateQuoteTemplateModal({
                   <Upload className="size-4 text-gray-500" strokeWidth={1.75} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-gray-900">
-                    Drop past quotes, a logo, or brand guidelines
+                  <p className="text-[13px] text-gray-900">
+                    Drop customer proposals, quote PDFs, order forms, brand guidelines
                   </p>
                   <p className="mt-0.5 text-[11px] text-gray-500">
                     PDF, DOCX, PNG, JPG, SVG · up to 20 MB each
@@ -194,24 +194,29 @@ export function CreateQuoteTemplateModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-gray-100 bg-gray-50/50 px-6 py-4">
-            {dismissible && (
+          <div className="flex items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/50 px-6 py-4">
+            <p className="min-w-0 text-[11px] leading-snug text-gray-500">
+              Takes about 30 seconds. Edit/review before publishing.
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              {dismissible && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              )}
               <button
                 type="button"
-                onClick={onClose}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50"
+                onClick={() => onGenerate(files)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-blue-700"
               >
-                Cancel
+                Generate template
+                <ArrowRight className="size-4" />
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onGenerate(files)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-blue-700"
-            >
-              Generate template
-              <ArrowRight className="size-4" />
-            </button>
+            </div>
           </div>
         </div>
 

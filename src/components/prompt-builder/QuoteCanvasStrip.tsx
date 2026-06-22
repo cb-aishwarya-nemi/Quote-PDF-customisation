@@ -1,5 +1,8 @@
 import { PreviewExportActions } from "@/components/prompt-builder/PreviewExportActions"
+import { PreviewPersonaPicker } from "@/components/prompt-builder/PreviewPersonaPicker"
 import { PreviewScenarioPicker } from "@/components/prompt-builder/PreviewScenarioPicker"
+import { TemplateConditionControl } from "@/components/prompt-builder/TemplateConditionControl"
+import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { Eye, Pencil } from "lucide-react"
 import type { Ref, RefObject } from "react"
@@ -29,7 +32,18 @@ export function CanvasDocumentActions({
     <div
       className={`flex shrink-0 items-center ${variant === "floating" ? "gap-2" : "gap-3"} ${className ?? ""}`}
     >
-      <PreviewExportActions documentRef={documentRef} variant={variant} />
+      <TemplateConditionControl variant={variant} />
+      <div
+        className="h-5 w-px shrink-0 bg-gray-300"
+        role="separator"
+        aria-orientation="vertical"
+      />
+      <div
+        className={`flex shrink-0 items-center ${
+          variant === "floating" ? "gap-2" : "gap-3"
+        }`}
+      >
+        <PreviewExportActions documentRef={documentRef} variant={variant} />
       {isPreview ? (
         <button
           type="button"
@@ -49,6 +63,7 @@ export function CanvasDocumentActions({
           Preview
         </button>
       )}
+      </div>
     </div>
   )
 }
@@ -75,7 +90,10 @@ export function CanvasToolbarRow({
       } ${className ?? ""}`}
     >
       {isPreview && (
-        <PreviewScenarioPicker variant={variant} className="min-w-0 shrink-0" />
+        <div className="flex min-w-0 shrink-0 items-center gap-3">
+          <PreviewScenarioPicker variant={variant} className="min-w-0 shrink-0" />
+          <PreviewPersonaPicker />
+        </div>
       )}
       {!isFloating && <div className="min-w-0 flex-1" />}
       <CanvasDocumentActions
@@ -93,9 +111,17 @@ type InlineToolbarProps = {
 }
 
 export function CanvasInlineToolbar({ documentRef, anchorRef }: InlineToolbarProps) {
+  const isSalesPreview = useIsSalesPreview()
+
   return (
     <div ref={anchorRef} className="mb-4">
       <CanvasToolbarRow documentRef={documentRef} />
+      {isSalesPreview && (
+        <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+          Previewing as a salesperson — edit unlocked fields; locked blocks stay
+          read-only at quote time.
+        </p>
+      )}
     </div>
   )
 }

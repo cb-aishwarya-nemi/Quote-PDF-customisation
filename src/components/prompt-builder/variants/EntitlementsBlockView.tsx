@@ -1,5 +1,6 @@
 import { EditableLabel, SectionLabel } from "@/components/prompt-builder/EditableLabel"
-import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
+import { VariableField } from "@/components/prompt-builder/VariableField"
+import { getEntitlementRowVariableDef } from "@/lib/derive-template-variables"
 import { DEFAULT_LABELS, staticLabel } from "@/lib/block-static-labels"
 import type { BuilderBlock } from "@/types/prompt-builder"
 
@@ -42,20 +43,29 @@ export function EntitlementsBlockView({ block, onField }: Props) {
         <ul className="space-y-3">
           {rows.map((row, i) => (
             <li key={i} className="border-l-2 border-blue-200 pl-3">
-              <InlineEditable
+              <VariableField
                 blockId={block.id}
+                blockType="entitlements"
+                field={`rows[${i}].name`}
+                variableDef={getEntitlementRowVariableDef(i, "name")}
                 value={row.name}
                 onChange={(v) => updateRow(i, "name", v)}
                 className="text-[12px] font-semibold text-gray-900"
               />
-              <InlineEditable
+              <VariableField
                 blockId={block.id}
+                blockType="entitlements"
+                field={`rows[${i}].limit`}
+                variableDef={getEntitlementRowVariableDef(i, "limit")}
                 value={row.limit}
                 onChange={(v) => updateRow(i, "limit", v)}
                 className="mt-0.5 text-[11px] text-gray-600"
               />
-              <InlineEditable
+              <VariableField
                 blockId={block.id}
+                blockType="entitlements"
+                field={`rows[${i}].notes`}
+                variableDef={getEntitlementRowVariableDef(i, "notes")}
                 value={row.notes}
                 onChange={(v) => updateRow(i, "notes", v)}
                 multiline
@@ -77,17 +87,23 @@ export function EntitlementsBlockView({ block, onField }: Props) {
           onChange={(v) => onField("label", v)}
           className="mb-2"
         />
-        <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+        <div className="divide-y divide-gray-100">
           {rows.map((row, i) => (
-            <div key={i} className="flex items-start justify-between gap-4 px-3 py-2 text-[11px]">
-              <InlineEditable
+            <div key={i} className="flex items-start justify-between gap-4 py-2 text-[11px]">
+              <VariableField
                 blockId={block.id}
+                blockType="entitlements"
+                field={`rows[${i}].name`}
+                variableDef={getEntitlementRowVariableDef(i, "name")}
                 value={row.name}
                 onChange={(v) => updateRow(i, "name", v)}
                 className="font-medium text-gray-900"
               />
-              <InlineEditable
+              <VariableField
                 blockId={block.id}
+                blockType="entitlements"
+                field={`rows[${i}].limit`}
+                variableDef={getEntitlementRowVariableDef(i, "limit")}
                 value={row.limit}
                 onChange={(v) => updateRow(i, "limit", v)}
                 className="shrink-0 text-gray-600"
@@ -125,22 +141,31 @@ export function EntitlementsBlockView({ block, onField }: Props) {
           {rows.map((row, i) => (
             <tr key={i} className="border-b border-gray-100 last:border-0">
               <td className="py-2 pr-3 align-top font-medium text-gray-900">
-                <InlineEditable
+                <VariableField
                   blockId={block.id}
+                  blockType="entitlements"
+                  field={`rows[${i}].name`}
+                  variableDef={getEntitlementRowVariableDef(i, "name")}
                   value={row.name}
                   onChange={(v) => updateRow(i, "name", v)}
                 />
               </td>
               <td className="py-2 pr-3 align-top text-gray-700">
-                <InlineEditable
+                <VariableField
                   blockId={block.id}
+                  blockType="entitlements"
+                  field={`rows[${i}].limit`}
+                  variableDef={getEntitlementRowVariableDef(i, "limit")}
                   value={row.limit}
                   onChange={(v) => updateRow(i, "limit", v)}
                 />
               </td>
               <td className="py-2 align-top text-gray-500">
-                <InlineEditable
+                <VariableField
                   blockId={block.id}
+                  blockType="entitlements"
+                  field={`rows[${i}].notes`}
+                  variableDef={getEntitlementRowVariableDef(i, "notes")}
                   value={row.notes}
                   onChange={(v) => updateRow(i, "notes", v)}
                   multiline

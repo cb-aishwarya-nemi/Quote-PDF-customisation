@@ -50,7 +50,7 @@ export const templateCategories: Array<TemplateCategory | "All"> = [
 export const predefinedTemplates: PredefinedTemplate[] = [
   {
     id: "preset-standard",
-    name: "Standard enterprise quote",
+    name: "Standard business quote",
     description:
       "Full B2B layout with header, pricing table, TCV summary, and terms at the bottom.",
     category: "Enterprise",

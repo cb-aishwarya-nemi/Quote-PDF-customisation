@@ -1,11 +1,8 @@
 import { ConditionBuilderPanel } from "@/components/prompt-builder/ConditionBuilderPanel"
 import { HeaderBackgroundControls } from "@/components/prompt-builder/HeaderBackgroundControls"
 import { VariantPicker } from "@/components/prompt-builder/VariantPicker"
-import {
-  useCanEditBlockStructure,
-  useIsSalesMode,
-  useIsTemplateEditMode,
-} from "@/hooks/use-builder-editor-mode"
+import { useBlockLayoutHints } from "@/hooks/use-block-layout-hints"
+import { useCanEditBlockStructure, useIsSalesMode, useIsTemplateEditMode } from "@/hooks/use-builder-editor-mode"
 import { isBlockLocked } from "@/lib/block-lock"
 import {
   describeConditionRulesShort,
@@ -15,7 +12,7 @@ import {
 import { BLOCK_VARIANTS, getVariantLabel } from "@/lib/block-variants"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import type { BlockDisplayCondition, BuilderBlock } from "@/types/prompt-builder"
-import { Filter, GripVertical, LayoutGrid, Lock, Trash2, Unlock, X } from "lucide-react"
+import { Filter, GripVertical, LayoutGrid, Lock, Trash2, TriangleAlert, Unlock, X } from "lucide-react"
 import { useEffect, useRef, useState, type ReactNode, type HTMLAttributes } from "react"
 
 type Props = {
@@ -56,6 +53,8 @@ export function BlockChrome({
   const hasCondition = hasConditions(displayCondition)
   const conditionSummary = describeConditionRulesShort(displayCondition)
   const isLocked = isBlockLocked(block.content)
+  const layoutHints = useBlockLayoutHints(block.id)
+  const hasLayoutHint = isTemplateEdit && layoutHints.length > 0
 
   useEffect(() => {
     if (!conditionOpen && !variantOpen) return
@@ -76,7 +75,7 @@ export function BlockChrome({
       {showAdminControls && dragHandleProps && (
         <button
           type="button"
-          className="absolute -left-7 top-3 flex w-5 cursor-grab items-center justify-center text-gray-300 opacity-0 transition-opacity hover:text-gray-500 group-hover/block:opacity-100 active:cursor-grabbing"
+          className="absolute left-0 top-3 flex w-5 -translate-x-full cursor-grab items-center justify-center pr-1 text-gray-300 opacity-0 transition-opacity hover:text-gray-500 group-hover/block:opacity-100 active:cursor-grabbing"
           aria-label="Drag to reorder"
           onClick={(e) => e.stopPropagation()}
           {...dragHandleProps}
@@ -90,9 +89,11 @@ export function BlockChrome({
         className={`relative min-w-0 rounded-xl border bg-white transition-all ${
           isSelected
             ? "border-blue-400 ring-2 ring-blue-100"
-            : isLocked && isSales
-              ? "border-slate-300 bg-slate-50/40"
-              : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+            : hasLayoutHint
+              ? "border-amber-300 ring-2 ring-amber-100"
+              : isLocked && isSales
+                ? "border-slate-300 bg-slate-50/40"
+                : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
         }`}
         onClick={() => setSelectedBlockId(block.id)}
         onKeyDown={(e) => {
@@ -153,9 +154,11 @@ export function BlockChrome({
               </button>
               <span
                 role="tooltip"
-                className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden w-max rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 shadow-md group-hover/condition:block"
+                className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden w-max max-w-[240px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium leading-snug text-slate-700 shadow-md group-hover/condition:block"
               >
-                {hasCondition ? "Condition set" : "Add condition"}
+                {hasCondition
+                  ? `Shows when ${conditionSummary}`
+                  : "Add condition"}
               </span>
               {conditionOpen && (
                 <div className="pointer-events-auto absolute right-0 top-full z-30 mt-1">
@@ -229,9 +232,13 @@ export function BlockChrome({
         )}
 
         {!isLocked && hasCondition && (
-          <div className="flex items-center gap-1 rounded-t-xl border-b border-amber-100 bg-amber-50/80 px-3 py-1">
-            <Filter className="size-3 shrink-0 text-amber-600" />
-            <span className="min-w-0 truncate text-[10px] font-medium text-amber-800">
+          <div
+            className={`flex items-center gap-1 border-b border-amber-100/90 bg-amber-50/35 px-3 py-0.5 ${
+              hasLayoutHint ? "" : "rounded-t-xl"
+            }`}
+          >
+            <Filter className="size-2.5 shrink-0 text-amber-500/80" strokeWidth={2} />
+            <span className="min-w-0 flex-1 truncate text-[9px] leading-tight text-amber-800/85">
               Shows when {conditionSummary}
             </span>
             {isTemplateEdit && (
@@ -241,12 +248,32 @@ export function BlockChrome({
                   e.stopPropagation()
                   setBlockDisplayCondition(block.id, null)
                 }}
-                className="ml-1 shrink-0 rounded p-0.5 text-amber-600 hover:bg-amber-100"
+                className="shrink-0 rounded p-0.5 text-amber-500/70 opacity-0 transition-opacity hover:bg-amber-100/60 hover:text-amber-700 group-hover/block:opacity-100"
                 aria-label="Remove condition"
               >
-                <X className="size-3" />
+                <X className="size-2.5" />
               </button>
             )}
+          </div>
+        )}
+
+        {hasLayoutHint && (
+          <div
+            className={`flex items-start gap-1.5 border-b border-amber-200 bg-amber-50 px-3 py-1.5 ${
+              !isLocked && hasCondition ? "" : "rounded-t-xl"
+            }`}
+          >
+            <TriangleAlert className="mt-px size-3 shrink-0 text-amber-600" />
+            <div className="min-w-0 space-y-0.5">
+              {layoutHints.map((hint) => (
+                <p
+                  key={hint.issueId}
+                  className="text-[10px] font-medium leading-snug text-amber-900"
+                >
+                  {hint.canvasMessage}
+                </p>
+              ))}
+            </div>
           </div>
         )}
 

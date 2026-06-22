@@ -26,6 +26,10 @@ export function deriveTemplateStats(template: BuilderTemplate): TemplateStats {
   ).length
 
   let conditionCount = 0
+  conditionCount += normalizeConditionRules(
+    (template.displayCondition ?? null) as BlockDisplayCondition,
+  ).length
+
   for (const block of template.blocks) {
     conditionCount += normalizeConditionRules(
       (block.content.displayCondition ?? null) as BlockDisplayCondition,
@@ -56,8 +60,7 @@ export function formatAutosaveAgo(iso: string): string {
     Math.floor((Date.now() - new Date(iso).getTime()) / 1000),
   )
 
-  if (diffSec < 5) return "just now"
-  if (diffSec < 60) return `${diffSec} sec ago`
+  if (diffSec < 60) return "just now"
 
   const diffMin = Math.floor(diffSec / 60)
   if (diffMin < 60) {

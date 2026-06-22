@@ -1,4 +1,7 @@
-import { CANVAS_DOCUMENT_MAX_WIDTH } from "@/lib/canvas-constants"
+import {
+  CANVAS_DOCUMENT_MAX_WIDTH,
+  CANVAS_DOCUMENT_PADDING_PX,
+} from "@/lib/canvas-constants"
 
 function Bone({ className }: { className?: string }) {
   return (
@@ -13,7 +16,13 @@ export function PromptBuilderSkeleton() {
     <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col bg-[#e8eaed]">
           <div className="flex-1 overflow-hidden p-6">
-            <div className="mx-auto w-full rounded-xl bg-white p-6 shadow-md ring-1 ring-black/5" style={{ maxWidth: CANVAS_DOCUMENT_MAX_WIDTH }}>
+            <div
+              className="mx-auto w-full rounded-xl bg-white shadow-md ring-1 ring-black/5"
+              style={{
+                maxWidth: CANVAS_DOCUMENT_MAX_WIDTH,
+                padding: CANVAS_DOCUMENT_PADDING_PX,
+              }}
+            >
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Bone className="h-5 w-2/5" />

@@ -24,10 +24,15 @@ export function AgentChatPanel() {
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
   const messages = usePromptBuilderStore((s) => s.messages)
   const isAgentTyping = usePromptBuilderStore((s) => s.isAgentTyping)
+  const ignoredValidationIssueIds = usePromptBuilderStore(
+    (s) => s.ignoredValidationIssueIds,
+  )
+  const ignoreValidationIssue = usePromptBuilderStore(
+    (s) => s.ignoreValidationIssue,
+  )
   const sendMessage = usePromptBuilderStore((s) => s.sendMessage)
   const [input, setInput] = useState("")
   const [collapsed, setCollapsed] = useState(readCollapsedPreference)
-  const [ignoredIssueIds, setIgnoredIssueIds] = useState<Set<string>>(() => new Set())
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const collapseAssistant = () => {
@@ -48,10 +53,6 @@ export function AgentChatPanel() {
     }
   }
 
-  useEffect(() => {
-    setIgnoredIssueIds(new Set())
-  }, [template?.id])
-
   const validationIssues = useMemo(
     () =>
       deriveTemplateValidationIssues(template).filter(
@@ -61,7 +62,7 @@ export function AgentChatPanel() {
   )
 
   const visibleValidationIssues = validationIssues.filter(
-    (issue) => !ignoredIssueIds.has(issue.id),
+    (issue) => !ignoredValidationIssueIds.includes(issue.id),
   )
 
   const actionNeeded = editorMode === "edit" && visibleValidationIssues.length > 0
@@ -89,7 +90,7 @@ export function AgentChatPanel() {
   }
 
   const handleIgnore = (issueId: string) => {
-    setIgnoredIssueIds((prev) => new Set(prev).add(issueId))
+    ignoreValidationIssue(issueId)
   }
 
   if (collapsed) {
@@ -174,10 +175,7 @@ export function AgentChatPanel() {
                   className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5"
                 >
                   <p className="text-[11px] font-medium leading-snug text-amber-950">
-                    {issue.messageLines[0]}
-                  </p>
-                  <p className="mt-0.5 text-[11px] font-medium leading-snug text-amber-950">
-                    {issue.messageLines[1]}
+                    {issue.message}
                   </p>
                   <div className="mt-2.5 flex items-center gap-2">
                     <button
@@ -186,7 +184,7 @@ export function AgentChatPanel() {
                       onClick={() => sendMessage(issue.action!.prompt)}
                       className="rounded-full bg-amber-600 px-3 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
                     >
-                      Fix it
+                      {issue.action!.label}
                     </button>
                     <button
                       type="button"

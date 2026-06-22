@@ -12,7 +12,7 @@ export function PromptBuilderHeader() {
   const publishBuilderTemplate = useTemplateLibraryStore(
     (s) => s.publishBuilderTemplate,
   )
-  const { status, lastSavedAt, visible } = useBuilderAutosave()
+  const { lastSavedAt, visible } = useBuilderAutosave()
 
   const handlePublish = () => {
     if (!template) return
@@ -52,15 +52,15 @@ export function PromptBuilderHeader() {
         </nav>
         <input
           type="text"
-          value={template?.name ?? "Untitled template"}
+          value={template?.name ?? ""}
           onChange={(e) => setTemplateName(e.target.value)}
-          className="mt-0.5 w-full max-w-md truncate border-0 bg-transparent p-0 text-[14px] font-semibold text-gray-900 outline-none"
+          placeholder="Template name"
+          className="mt-0.5 w-full max-w-md truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[14px] font-semibold text-gray-900 outline-none transition-colors hover:border-gray-200 hover:bg-gray-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
           aria-label="Template name"
         />
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
         <AutosaveIndicator
-          status={status}
           lastSavedAt={lastSavedAt}
           visible={visible}
         />

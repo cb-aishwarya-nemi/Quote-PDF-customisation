@@ -1,6 +1,6 @@
 import {
   useCanEditBlockContent,
-  useIsPreviewMode,
+  useIsAdminPreview,
 } from "@/hooks/use-builder-editor-mode"
 import { useEffect, useRef } from "react"
 
@@ -14,6 +14,8 @@ type Props = {
   readOnly?: boolean
   /** Show hover/focus edit affordance. Off when parent already signals editability. */
   hoverAffordance?: boolean
+  /** Multiline width — hug intrinsic text width or fill the parent row */
+  width?: "full" | "hug"
 }
 
 export function InlineEditable({
@@ -25,12 +27,13 @@ export function InlineEditable({
   blockId,
   readOnly,
   hoverAffordance = true,
+  width = "full",
 }: Props) {
-  const isPreview = useIsPreviewMode()
+  const isAdminPreview = useIsAdminPreview()
   const canEdit = blockId ? useCanEditBlockContent(blockId) : true
   const isReadOnly =
     readOnly === true ||
-    isPreview ||
+    isAdminPreview ||
     (blockId !== undefined && !canEdit)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -47,14 +50,16 @@ export function InlineEditable({
         <span className={`text-gray-300 ${className}`}>{placeholder}</span>
       )
     }
-    return <span className={className}>{value}</span>
+    return <span className={`whitespace-pre-wrap ${className}`}>{value}</span>
   }
 
   const editableAffordance = !hoverAffordance
     ? "outline-none focus:rounded focus:bg-blue-50/50 focus:ring-1 focus:ring-blue-200"
     : multiline
-      ? "block w-full cursor-text rounded px-1 -mx-1 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200"
-      : "inline-block w-fit max-w-full cursor-text rounded px-0.5 -mx-0.5 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 empty:min-w-[2ch]"
+      ? width === "hug"
+        ? "inline-block w-fit max-w-full cursor-text rounded px-1 -mx-1 align-top whitespace-pre-wrap outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200"
+        : "block w-full cursor-text rounded px-1 -mx-1 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200"
+      : "inline-block w-fit cursor-text whitespace-nowrap rounded px-0.5 -mx-0.5 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 empty:min-w-[2ch]"
 
   return (
     <div

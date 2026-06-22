@@ -1,4 +1,4 @@
-import { useCanEditBlockContent, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
+import { useCanEditBlockContent, useIsAdminPreview, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
 import { isImageFile } from "@/lib/pdf-page-render"
 import {
   describeConditionRulesShort,
@@ -53,8 +53,9 @@ const iconBtnClass =
 
 export function HeaderLogo({ block, centered = false, compact = false }: Props) {
   const isPreview = useIsPreviewMode()
+  const isAdminPreview = useIsAdminPreview()
   const canEdit = useCanEditBlockContent(block.id)
-  const isReadOnly = isPreview || !canEdit
+  const isReadOnly = isAdminPreview || !canEdit
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
   const updateBlockField = usePromptBuilderStore((s) => s.updateBlockField)
   const inputRef = useRef<HTMLInputElement>(null)

@@ -3,6 +3,8 @@ import {
   AddBlockDivider,
 } from "@/components/prompt-builder/AddBlockDivider"
 import { BuilderBlockView } from "@/components/prompt-builder/BuilderBlockView"
+import { BlockChrome } from "@/components/prompt-builder/BlockChrome"
+import { CanvasLayoutBanner } from "@/components/prompt-builder/CanvasLayoutBanner"
 import {
   BuilderDragOverlayLabel,
   BuilderBlockRow,
@@ -14,6 +16,7 @@ import {
   CanvasToolbarRow,
 } from "@/components/prompt-builder/QuoteCanvasStrip"
 import { TemplateDocumentFrame } from "@/components/prompt-builder/TemplateDocumentFrame"
+import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import { CANVAS_DOCUMENT_MAX_WIDTH } from "@/lib/canvas-constants"
 import {
   canAddBesideBlock,
@@ -21,7 +24,7 @@ import {
 } from "@/lib/block-layout"
 import { signatureBlockNeedsPageBreak } from "@/lib/template-validation"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
-import { blockIsVisible } from "@/types/prompt-builder"
+import { blockIsVisible, templateAppliesToScenario } from "@/types/prompt-builder"
 import type { BuilderBlock } from "@/types/prompt-builder"
 import {
   DndContext,
@@ -37,6 +40,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import { describeConditionRules, hasConditions } from "@/lib/segment-conditions"
 
 function useFloatingActionsOnScrollUp(
   scrollRef: React.RefObject<HTMLDivElement | null>,
@@ -89,6 +93,7 @@ function renderPreviewRow(
   row: ReturnType<typeof groupBlocksForLayout>[number],
   activeScenario: Parameters<typeof blockIsVisible>[1],
   key: string,
+  interactive: boolean,
 ) {
   if (row.type === "pair") {
     const leftVisible = blockIsVisible(
@@ -109,14 +114,14 @@ function renderPreviewRow(
     if (leftVisible && rightVisible) {
       return (
         <BuilderBlockRow key={key}>
-          <PreviewBlockCell block={row.left} />
-          <PreviewBlockCell block={row.right} />
+          <PreviewBlockCell block={row.left} interactive={interactive} />
+          <PreviewBlockCell block={row.right} interactive={interactive} />
         </BuilderBlockRow>
       )
     }
 
     const block = leftVisible ? row.left : row.right
-    return <PreviewBlockCell key={key} block={block} />
+    return <PreviewBlockCell key={key} block={block} interactive={interactive} />
   }
 
   const visible = blockIsVisible(
@@ -126,21 +131,29 @@ function renderPreviewRow(
     activeScenario,
   )
   if (!visible) return null
-  return <PreviewBlockCell key={key} block={row.block} />
+  return <PreviewBlockCell key={key} block={row.block} interactive={interactive} />
 }
 
 function PreviewBlockCell({
   block,
   className,
+  interactive = false,
 }: {
   block: BuilderBlock
   className?: string
+  interactive?: boolean
 }) {
   return (
     <div
       className={`${signatureBlockNeedsPageBreak(block) ? "break-before-page pt-8" : ""} ${className ?? ""}`}
     >
-      <BuilderBlockView block={block} />
+      {interactive ? (
+        <BlockChrome block={block}>
+          <BuilderBlockView block={block} />
+        </BlockChrome>
+      ) : (
+        <BuilderBlockView block={block} />
+      )}
     </div>
   )
 }
@@ -160,6 +173,7 @@ export function QuoteCanvasArea() {
   const reorderBlocks = usePromptBuilderStore((s) => s.reorderBlocks)
   const clearSelection = usePromptBuilderStore((s) => s.setSelectedBlockId)
   const isPreview = editorMode === "preview"
+  const isSalesPreview = useIsSalesPreview()
   const isSales = editorMode === "sales"
 
   const [activeDragBlock, setActiveDragBlock] = useState<BuilderBlock | null>(
@@ -176,12 +190,23 @@ export function QuoteCanvasArea() {
 
   const visiblePreviewRows = useMemo(() => {
     if (!template) return []
+    if (!templateAppliesToScenario(template, activeScenario)) return []
     return layoutRows
       .map((row, index) =>
-        renderPreviewRow(row, activeScenario, `preview-row-${index}`),
+        renderPreviewRow(
+          row,
+          activeScenario,
+          `preview-row-${index}`,
+          isSalesPreview,
+        ),
       )
       .filter(Boolean)
-  }, [layoutRows, activeScenario, template])
+  }, [layoutRows, activeScenario, template, isSalesPreview])
+
+  const templateAppliesInPreview = templateAppliesToScenario(
+    template,
+    activeScenario,
+  )
 
   const handleDragStart = (event: DragStartEvent) => {
     const block = event.active.data.current?.block as BuilderBlock | undefined
@@ -203,8 +228,9 @@ export function QuoteCanvasArea() {
   if (!template) return null
 
   const editCanvas = (
-    <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
-      {layoutRows.map((row) => {
+    <>
+      <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
+        {layoutRows.map((row) => {
         if (row.type === "pair") {
           return (
             <Fragment key={`${row.left.id}-${row.right.id}`}>
@@ -238,7 +264,9 @@ export function QuoteCanvasArea() {
           </Fragment>
         )
       })}
-    </SortableContext>
+      </SortableContext>
+      {editorMode === "edit" && <CanvasLayoutBanner />}
+    </>
   )
 
   return (
@@ -249,8 +277,8 @@ export function QuoteCanvasArea() {
       {showFloatingActions && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-6 pt-3">
           <div
-            className="pointer-events-auto mx-auto w-full pl-7"
-            style={{ maxWidth: CANVAS_DOCUMENT_MAX_WIDTH + 28 }}
+            className="pointer-events-auto mx-auto w-full"
+            style={{ maxWidth: CANVAS_DOCUMENT_MAX_WIDTH }}
           >
             {isPreview ? (
               <CanvasToolbarRow documentRef={documentRef} variant="floating" />
@@ -268,8 +296,8 @@ export function QuoteCanvasArea() {
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 pb-6 pt-3">
         <div
-          className="mx-auto w-full pl-7"
-          style={{ maxWidth: CANVAS_DOCUMENT_MAX_WIDTH + 28 }}
+          className="mx-auto w-full"
+          style={{ maxWidth: CANVAS_DOCUMENT_MAX_WIDTH }}
         >
           <CanvasInlineToolbar
             documentRef={documentRef}
@@ -278,7 +306,22 @@ export function QuoteCanvasArea() {
 
           {isPreview ? (
             <TemplateDocumentFrame exportRef={documentRef}>
-              {visiblePreviewRows.length === 0 ? (
+              {!templateAppliesInPreview ? (
+                <div className="py-12 text-center">
+                  <p className="text-[13px] text-gray-700">
+                    This template doesn&apos;t apply to{" "}
+                    <span className="font-medium">{activeScenario.label}</span>.
+                  </p>
+                  {hasConditions(template.displayCondition ?? null) && (
+                    <p className="mt-2 text-[12px] text-gray-500">
+                      {describeConditionRules(template.displayCondition ?? null)}
+                    </p>
+                  )}
+                  <p className="mt-3 text-[12px] text-gray-400">
+                    Switch scenario or adjust template conditions in the header.
+                  </p>
+                </div>
+              ) : visiblePreviewRows.length === 0 ? (
                 <p className="py-12 text-center text-[13px] text-gray-500">
                   No blocks visible for{" "}
                   <span className="font-medium text-gray-700">

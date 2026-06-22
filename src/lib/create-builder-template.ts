@@ -261,11 +261,13 @@ export function createStandaloneBuilderBlock(
   return createBuilderBlock(type, order)
 }
 
+export const DEFAULT_QUOTE_TEMPLATE_NAME = "Standard business quote"
+
 export function createBuilderTemplate(
   id: string,
   options?: { variantId?: string; presetId?: string; name?: string },
 ): BuilderTemplate {
-  const name = options?.name ?? "Untitled quote template"
+  const name = options?.name ?? DEFAULT_QUOTE_TEMPLATE_NAME
 
   let blocks: BuilderBlock[]
 
@@ -308,6 +310,7 @@ export function createBuilderTemplate(
     name,
     variantId: options?.variantId,
     presetId: options?.presetId,
+    displayCondition: null,
     blocks: normalizeBuilderBlocks(blocks),
   }
 }

@@ -1,12 +1,16 @@
-import type { BuilderBlock, BuilderTemplate } from "@/types/prompt-builder"
+import {
+  findBlockIndex,
+} from "@/lib/block-layout-helpers"
+import { BLOCK_TYPE_LABELS } from "@/lib/derive-template-variables"
+import type { BuilderBlock, BuilderBlockType, BuilderTemplate } from "@/types/prompt-builder"
 
 export type TemplateValidationIssue = {
   id: string
   severity: "warning" | "info"
-  /** Two-line message shown in the agent action area */
-  messageLines: [string, string]
+  message: string
   blockId?: string
   action?: {
+    label: string
     prompt: string
   }
 }
@@ -20,6 +24,18 @@ const CLOSING_BLOCK_TYPES: BuilderBlock["type"][] = [
   "entitlements",
 ]
 
+function label(type: BuilderBlockType): string {
+  return BLOCK_TYPE_LABELS[type] ?? type
+}
+
+function pushIssue(
+  issues: TemplateValidationIssue[],
+  issue: TemplateValidationIssue,
+) {
+  if (issues.some((entry) => entry.id === issue.id)) return
+  issues.push(issue)
+}
+
 export function deriveTemplateValidationIssues(
   template: BuilderTemplate | null,
 ): TemplateValidationIssue[] {
@@ -27,52 +43,347 @@ export function deriveTemplateValidationIssues(
 
   const issues: TemplateValidationIssue[] = []
   const blocks = template.blocks
-  const signatureIndex = blocks.findIndex((b) => b.type === "signature")
+
+  const headerIndex = findBlockIndex(blocks, "quote_summary_header")
+  const billedToIndex = findBlockIndex(blocks, "billed_to")
+  const contractIndex = findBlockIndex(blocks, "contract_details")
+  const pricingIndex = findBlockIndex(blocks, "pricing")
+  const tcvIndex = findBlockIndex(blocks, "tcv_summary")
+  const entitlementsIndex = findBlockIndex(blocks, "entitlements")
+  const termsIndex = findBlockIndex(blocks, "terms")
+  const signatureIndex = findBlockIndex(blocks, "signature")
+  const aeIndex = findBlockIndex(blocks, "ae_profile")
+
+  if (headerIndex > 0) {
+    const first = blocks[0]
+    pushIssue(issues, {
+      id: "header-not-first",
+      severity: "warning",
+      message: `${label(first.type)} is first, but quotes usually open with the summary header. Move the header to the top?`,
+      blockId: blocks[headerIndex].id,
+      action: {
+        label: "Move header to top",
+        prompt: "Move the quote summary header to the top",
+      },
+    })
+  }
+
+  if (pricingIndex >= 0 && billedToIndex >= 0 && pricingIndex < billedToIndex) {
+    pushIssue(issues, {
+      id: "pricing-before-billed-to",
+      severity: "warning",
+      message:
+        "Pricing appears before the customer billing section. Most quotes introduce the customer first — reorder?",
+      blockId: blocks[pricingIndex].id,
+      action: {
+        label: "Put billing first",
+        prompt: "Move billed to before the pricing table",
+      },
+    })
+  }
+
+  if (pricingIndex >= 0 && contractIndex >= 0 && pricingIndex < contractIndex) {
+    pushIssue(issues, {
+      id: "pricing-before-contract-details",
+      severity: "warning",
+      message:
+        "Pricing is listed before contract details. Deal terms usually come before line items — reorder?",
+      blockId: blocks[pricingIndex].id,
+      action: {
+        label: "Put contract details first",
+        prompt: "Move contract details before the pricing table",
+      },
+    })
+  }
+
+  if (tcvIndex >= 0 && pricingIndex >= 0 && tcvIndex < pricingIndex) {
+    pushIssue(issues, {
+      id: "tcv-before-pricing",
+      severity: "warning",
+      message:
+        "Total contract value appears before line-item pricing. Buyers may fixate on TCV too early — move it after pricing?",
+      blockId: blocks[tcvIndex].id,
+      action: {
+        label: "Move TCV after pricing",
+        prompt: "Move TCV summary after the pricing table",
+      },
+    })
+  } else if (tcvIndex >= 0 && tcvIndex <= 2) {
+    pushIssue(issues, {
+      id: "tcv-too-early",
+      severity: "warning",
+      message:
+        "Total contract value is near the top of the quote. Placing TCV after pricing avoids early sticker shock — move it down?",
+      blockId: blocks[tcvIndex].id,
+      action: {
+        label: "Move TCV after pricing",
+        prompt: "Move TCV summary after the pricing table",
+      },
+    })
+  }
+
+  if (entitlementsIndex >= 0 && pricingIndex >= 0 && entitlementsIndex < pricingIndex) {
+    pushIssue(issues, {
+      id: "entitlements-before-pricing",
+      severity: "warning",
+      message:
+        "Entitlements are listed before line-item pricing. Buyers typically see prices first — move entitlements down?",
+      blockId: blocks[entitlementsIndex].id,
+      action: {
+        label: "Move entitlements down",
+        prompt: "Move entitlements after the pricing table",
+      },
+    })
+  }
+
+  if (termsIndex >= 0 && pricingIndex >= 0 && termsIndex < pricingIndex) {
+    pushIssue(issues, {
+      id: "terms-before-pricing",
+      severity: "warning",
+      message:
+        "Terms & conditions appear before pricing. Legal clauses usually follow the commercial sections — move terms down?",
+      blockId: blocks[termsIndex].id,
+      action: {
+        label: "Move terms down",
+        prompt: "Move terms and conditions after pricing",
+      },
+    })
+  } else if (termsIndex >= 0 && termsIndex <= 2) {
+    pushIssue(issues, {
+      id: "terms-too-early",
+      severity: "warning",
+      message:
+        "Terms & conditions are near the top of the quote. Legal text usually sits after pricing — move terms down?",
+      blockId: blocks[termsIndex].id,
+      action: {
+        label: "Move terms down",
+        prompt: "Move terms and conditions after pricing",
+      },
+    })
+  }
+
+  if (aeIndex >= 0 && signatureIndex >= 0 && aeIndex < signatureIndex) {
+    pushIssue(issues, {
+      id: "ae-before-signature",
+      severity: "warning",
+      message:
+        "AE profile is placed before the signature block. Sales contact info usually sits at the very end — move it?",
+      blockId: blocks[aeIndex].id,
+      action: {
+        label: "Move AE to end",
+        prompt: "Move AE profile after the signature block",
+      },
+    })
+  }
 
   if (signatureIndex === -1) {
-    issues.push({
+    pushIssue(issues, {
       id: "missing-signature",
       severity: "warning",
-      messageLines: [
-        "Most quote templates include a signature block at the end.",
-        "Would you like to add one?",
-      ],
+      message:
+        "Most quote templates include a signature block at the end. Would you like to add one?",
       action: {
+        label: "Add signature block",
         prompt: "Add a signature block at the end of the template",
       },
     })
-    return issues
-  }
+  } else {
+    const signatureBlock = blocks[signatureIndex]
+    const afterSignature = blocks.slice(signatureIndex + 1)
+    const disallowedAfter = afterSignature.filter(
+      (block) => !ALLOWED_AFTER_SIGNATURE.includes(block.type),
+    )
+    const lastClosingIndex = blocks.reduce(
+      (max, block, index) =>
+        CLOSING_BLOCK_TYPES.includes(block.type) ? Math.max(max, index) : max,
+      -1,
+    )
+    const signatureTooEarly =
+      lastClosingIndex !== -1 && signatureIndex < lastClosingIndex
 
-  const signatureBlock = blocks[signatureIndex]
-  const afterSignature = blocks.slice(signatureIndex + 1)
-  const disallowedAfter = afterSignature.filter(
-    (b) => !ALLOWED_AFTER_SIGNATURE.includes(b.type),
-  )
-  const lastClosingIndex = blocks.reduce(
-    (max, block, index) =>
-      CLOSING_BLOCK_TYPES.includes(block.type) ? Math.max(max, index) : max,
-    -1,
-  )
-  const signatureTooEarly =
-    lastClosingIndex !== -1 && signatureIndex < lastClosingIndex
-
-  if (signatureTooEarly || disallowedAfter.length > 0) {
-    issues.push({
-      id: "signature-placement",
-      severity: "warning",
-      messageLines: [
-        "Signature blocks generally fit at the end of the quote,",
-        "after pricing and terms. Would you like to move it?",
-      ],
-      blockId: signatureBlock.id,
-      action: {
-        prompt: "Move signature to the end of the template",
-      },
-    })
+    if (signatureTooEarly || disallowedAfter.length > 0) {
+      pushIssue(issues, {
+        id: "signature-placement",
+        severity: "warning",
+        message:
+          "Signature blocks generally fit at the end of the quote, after pricing and terms. Would you like to move it?",
+        blockId: signatureBlock.id,
+        action: {
+          label: "Move signature to end",
+          prompt: "Move signature to the end of the template",
+        },
+      })
+    }
   }
 
   return issues
+}
+
+export type BlockLayoutHint = {
+  issueId: string
+  canvasMessage: string
+}
+
+export type CanvasLayoutBanner = {
+  issueId: string
+  message: string
+  action?: {
+    label: string
+    prompt: string
+  }
+}
+
+function addBlockHint(
+  map: Map<string, BlockLayoutHint[]>,
+  blockId: string,
+  hint: BlockLayoutHint,
+) {
+  const existing = map.get(blockId) ?? []
+  if (existing.some((entry) => entry.issueId === hint.issueId)) return
+  map.set(blockId, [...existing, hint])
+}
+
+export function deriveLayoutVisualHints(
+  template: BuilderTemplate | null,
+  ignoredIssueIds: ReadonlySet<string> = new Set(),
+): {
+  blockHints: Map<string, BlockLayoutHint[]>
+  canvasBanners: CanvasLayoutBanner[]
+} {
+  const blockHints = new Map<string, BlockLayoutHint[]>()
+  const canvasBanners: CanvasLayoutBanner[] = []
+
+  if (!template) return { blockHints, canvasBanners }
+
+  const blocks = template.blocks
+  const issues = deriveTemplateValidationIssues(template).filter(
+    (issue) =>
+      issue.severity === "warning" &&
+      issue.action &&
+      !ignoredIssueIds.has(issue.id),
+  )
+
+  for (const issue of issues) {
+    switch (issue.id) {
+      case "header-not-first": {
+        const headerIndex = findBlockIndex(blocks, "quote_summary_header")
+        if (headerIndex > 0) {
+          addBlockHint(blockHints, blocks[0].id, {
+            issueId: issue.id,
+            canvasMessage: "Quotes usually open with the summary header",
+          })
+          addBlockHint(blockHints, blocks[headerIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "Move this header to the top",
+          })
+        }
+        break
+      }
+      case "pricing-before-billed-to": {
+        const pricingIndex = findBlockIndex(blocks, "pricing")
+        const billedToIndex = findBlockIndex(blocks, "billed_to")
+        if (pricingIndex >= 0) {
+          addBlockHint(blockHints, blocks[pricingIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "Pricing usually follows customer billing",
+          })
+        }
+        if (billedToIndex >= 0) {
+          addBlockHint(blockHints, blocks[billedToIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "Customer billing usually comes before pricing",
+          })
+        }
+        break
+      }
+      case "pricing-before-contract-details": {
+        const pricingIndex = findBlockIndex(blocks, "pricing")
+        const contractIndex = findBlockIndex(blocks, "contract_details")
+        if (pricingIndex >= 0) {
+          addBlockHint(blockHints, blocks[pricingIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "Pricing usually follows contract details",
+          })
+        }
+        if (contractIndex >= 0) {
+          addBlockHint(blockHints, blocks[contractIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "Contract details usually come before pricing",
+          })
+        }
+        break
+      }
+      case "tcv-before-pricing":
+      case "tcv-too-early": {
+        const tcvIndex = findBlockIndex(blocks, "tcv_summary")
+        if (tcvIndex >= 0) {
+          addBlockHint(blockHints, blocks[tcvIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "TCV usually comes after pricing",
+          })
+        }
+        break
+      }
+      case "entitlements-before-pricing": {
+        const entitlementsIndex = findBlockIndex(blocks, "entitlements")
+        if (entitlementsIndex >= 0) {
+          addBlockHint(blockHints, blocks[entitlementsIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "Entitlements usually follow pricing",
+          })
+        }
+        break
+      }
+      case "terms-before-pricing":
+      case "terms-too-early": {
+        const termsIndex = findBlockIndex(blocks, "terms")
+        if (termsIndex >= 0) {
+          addBlockHint(blockHints, blocks[termsIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "Terms usually follow pricing",
+          })
+        }
+        break
+      }
+      case "ae-before-signature": {
+        const aeIndex = findBlockIndex(blocks, "ae_profile")
+        if (aeIndex >= 0) {
+          addBlockHint(blockHints, blocks[aeIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "AE profile usually sits at the very end",
+          })
+        }
+        break
+      }
+      case "signature-placement": {
+        const signatureIndex = findBlockIndex(blocks, "signature")
+        if (signatureIndex >= 0) {
+          addBlockHint(blockHints, blocks[signatureIndex].id, {
+            issueId: issue.id,
+            canvasMessage: "Signature usually closes the quote",
+          })
+        }
+        break
+      }
+      case "missing-signature":
+        canvasBanners.push({
+          issueId: issue.id,
+          message: issue.message,
+          action: issue.action,
+        })
+        break
+      default:
+        if (issue.blockId) {
+          addBlockHint(blockHints, issue.blockId, {
+            issueId: issue.id,
+            canvasMessage: issue.message,
+          })
+        }
+        break
+    }
+  }
+
+  return { blockHints, canvasBanners }
 }
 
 export function signatureBlockNeedsPageBreak(block: BuilderBlock): boolean {

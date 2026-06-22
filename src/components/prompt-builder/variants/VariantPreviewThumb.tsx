@@ -64,29 +64,37 @@ export function VariantPreviewThumb({ blockType, variantId, selected }: Props) {
   if (blockType === "tcv_summary") {
     if (variantId === "cards") {
       return (
-        <div className={`${shell} gap-0.5 p-0`}>
-          <div className={`h-3 w-full rounded-t ${selected ? "bg-[#012A38]" : "bg-gray-600"}`} />
-          <div className="flex flex-1 gap-0.5 px-0.5 pb-0.5">
-            <div className={`flex-1 rounded-sm border ${selected ? "border-cb-orange/30 bg-white" : "border-gray-200 bg-white"}`} />
-            <div className={`flex-1 rounded-sm border ${selected ? "border-cb-orange/30 bg-white" : "border-gray-200 bg-white"}`} />
+        <div className={`${shell} gap-0 p-0 overflow-hidden`}>
+          <div className={`h-3.5 w-full ${selected ? "bg-[#012A38]" : "bg-gray-600"}`} />
+          <div className="-mt-1 flex flex-1 gap-0.5 px-0.5 pb-0.5">
+            <div className={`flex-1 rounded-sm border shadow-sm ${selected ? "border-cb-orange/30 bg-white" : "border-gray-200 bg-white"}`} />
+            <div className={`flex-1 rounded-sm border shadow-sm ${selected ? "border-cb-orange/30 bg-white" : "border-gray-200 bg-white"}`} />
+            <div className={`flex-1 rounded-sm border shadow-sm ${selected ? "border-cb-orange/30 bg-white" : "border-gray-200 bg-white"}`} />
           </div>
         </div>
       )
     }
     if (variantId === "inline") {
       return (
-        <div className={`${shell} flex-row items-center gap-0.5`}>
-          <Bar w="w-4" h="h-1.5" className={accent} />
+        <div className={`${shell} flex-row items-center gap-1 px-1`}>
+          <Bar w="w-3.5" h="h-1.5" className={accent} />
+          <div className={`h-2.5 w-px shrink-0 ${faint}`} />
           <Bar w="w-2" className={faint} />
           <Bar w="w-2" className={faint} />
         </div>
       )
     }
     return (
-      <div className={`${shell} gap-0.5`}>
-        <Bar w="w-8" h="h-1.5" className={accent} />
-        <Bar w="w-5" className={faint} />
-        <div className="mt-auto flex gap-0.5">
+      <div className={`${shell} gap-0 p-0 overflow-hidden`}>
+        <div className="flex flex-1 gap-0.5 p-1">
+          <div className={`w-0.5 shrink-0 rounded-full ${accent}`} />
+          <div className="flex flex-1 flex-col gap-0.5">
+            <Bar w="w-5" h="h-1" className={accent} />
+            <Bar w="w-3" className={faint} />
+          </div>
+        </div>
+        <div className={`flex gap-0.5 border-t px-1 py-0.5 ${selected ? "border-cb-orange/20 bg-cb-orange/[0.03]" : "border-gray-200 bg-gray-50"}`}>
+          <Bar w="w-3" className={faint} />
           <Bar w="w-3" className={faint} />
           <Bar w="w-3" className={faint} />
         </div>

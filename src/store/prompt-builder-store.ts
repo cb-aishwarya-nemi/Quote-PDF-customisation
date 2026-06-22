@@ -12,6 +12,12 @@ import {
 } from "@/lib/segment-conditions"
 import { createStandaloneBuilderBlock, normalizeBuilderBlocks } from "@/lib/create-builder-template"
 import {
+  findBlockIndex,
+  moveBlockAfterType,
+  moveBlockBeforeType,
+  moveBlockToStart,
+} from "@/lib/block-layout-helpers"
+import {
   normalizeBlockLayout,
   setBlockLayoutColumn,
 } from "@/lib/block-layout"
@@ -19,7 +25,10 @@ import {
   formatVariablesListReply,
 } from "@/lib/derive-template-variables"
 import { createId } from "@/lib/create-id"
-import { makeGenerationSummaryMessage } from "@/lib/template-generation-steps"
+import {
+  makeCreationBriefReply,
+  makeGenerationSummaryMessage,
+} from "@/lib/template-generation-steps"
 import {
   applyAgentDemoChanges,
   DEMO_USER_PROMPT,
@@ -41,11 +50,25 @@ import { PREVIEW_SCENARIOS } from "@/types/prompt-builder"
 import { arrayMove } from "@dnd-kit/sortable"
 import { create } from "zustand"
 
+export type BuilderEditorMode = "edit" | "preview" | "sales"
+export type PreviewPersona = "admin" | "sales"
+
+export function isSalesRestrictedEditor(
+  editorMode: BuilderEditorMode,
+  previewPersona: PreviewPersona,
+): boolean {
+  return (
+    editorMode === "sales" ||
+    (editorMode === "preview" && previewPersona === "sales")
+  )
+}
+
 function blockLockedInSalesMode(
   editorMode: BuilderEditorMode,
+  previewPersona: PreviewPersona,
   block: BuilderBlock | undefined,
 ): boolean {
-  return editorMode === "sales" && isBlockLocked(block?.content)
+  return isSalesRestrictedEditor(editorMode, previewPersona) && isBlockLocked(block?.content)
 }
 
 function findTemplateBlock(
@@ -74,15 +97,137 @@ function switchVariant(
   return `Switched the ${label} to the ${variantId.replace(/_/g, " ")} layout. Check the canvas preview.`
 }
 
-export type BuilderEditorMode = "edit" | "preview" | "sales"
+function applyBlockOrder(
+  set: (partial: Partial<PromptBuilderStore> | ((s: PromptBuilderStore) => Partial<PromptBuilderStore>)) => void,
+  blocks: BuilderBlock[],
+  selectedBlockId?: string | null,
+) {
+  set((s) => {
+    if (!s.template) return s
+    return {
+      template: {
+        ...s.template,
+        blocks: normalizeBlockLayout(blocks).map((block, index) => ({
+          ...block,
+          order: index,
+        })),
+      },
+      selectedBlockId: selectedBlockId ?? s.selectedBlockId,
+    }
+  })
+}
+
+function tryLayoutFixReply(
+  lower: string,
+  template: BuilderTemplate,
+  set: (partial: Partial<PromptBuilderStore> | ((s: PromptBuilderStore) => Partial<PromptBuilderStore>)) => void,
+): string | null {
+  const apply = (
+    blocks: BuilderBlock[] | null,
+    message: string,
+    blockType?: BuilderBlockType,
+  ): string | null => {
+    if (!blocks) return null
+    const block = blockType
+      ? blocks.find((entry) => entry.type === blockType)
+      : undefined
+    applyBlockOrder(set, blocks, block?.id ?? null)
+    return message
+  }
+
+  if (
+    (lower.includes("quote summary") || lower.includes("summary header")) &&
+    lower.includes("top")
+  ) {
+    return apply(
+      moveBlockToStart(template.blocks, "quote_summary_header"),
+      "Moved the quote summary header to the top.",
+      "quote_summary_header",
+    )
+  }
+
+  if (lower.includes("billed to") && lower.includes("before") && lower.includes("pricing")) {
+    return apply(
+      moveBlockBeforeType(template.blocks, "billed_to", "pricing"),
+      "Moved billed to ahead of the pricing table.",
+      "billed_to",
+    )
+  }
+
+  if (
+    lower.includes("contract details") &&
+    lower.includes("before") &&
+    lower.includes("pricing")
+  ) {
+    return apply(
+      moveBlockBeforeType(template.blocks, "contract_details", "pricing"),
+      "Moved contract details ahead of the pricing table.",
+      "contract_details",
+    )
+  }
+
+  if (lower.includes("tcv") && lower.includes("after") && lower.includes("pricing")) {
+    return apply(
+      moveBlockAfterType(template.blocks, "tcv_summary", "pricing"),
+      "Moved the TCV summary after pricing so buyers see line items before the total.",
+      "tcv_summary",
+    )
+  }
+
+  if (
+    lower.includes("entitlements") &&
+    lower.includes("after") &&
+    lower.includes("pricing")
+  ) {
+    return apply(
+      moveBlockAfterType(template.blocks, "entitlements", "pricing"),
+      "Moved entitlements after the pricing table.",
+      "entitlements",
+    )
+  }
+
+  if (lower.includes("terms") && lower.includes("after") && lower.includes("pricing")) {
+    const { blocks } = template
+    const entitlementsIndex = findBlockIndex(blocks, "entitlements")
+    const pricingIndex = findBlockIndex(blocks, "pricing")
+    if (entitlementsIndex >= 0 && pricingIndex >= 0 && entitlementsIndex > pricingIndex) {
+      return apply(
+        moveBlockAfterType(blocks, "terms", "entitlements"),
+        "Moved terms and conditions after the commercial sections.",
+        "terms",
+      )
+    }
+    return apply(
+      moveBlockAfterType(blocks, "terms", "pricing"),
+      "Moved terms and conditions after pricing.",
+      "terms",
+    )
+  }
+
+  if (
+    (lower.includes("ae profile") || lower.includes("ae")) &&
+    lower.includes("after") &&
+    lower.includes("signature")
+  ) {
+    return apply(
+      moveBlockAfterType(template.blocks, "ae_profile", "signature"),
+      "Moved the AE profile after the signature block.",
+      "ae_profile",
+    )
+  }
+
+  return null
+}
 
 type PromptBuilderStore = {
   template: BuilderTemplate | null
   selectedBlockId: string | null
   editorMode: BuilderEditorMode
+  previewPersona: PreviewPersona
   activeScenario: PreviewScenario
   messages: ChatMessage[]
   isAgentTyping: boolean
+  ignoredValidationIssueIds: string[]
   /** PDF picked during add-block flow — opens page picker on the new block */
   pendingImagePdfImport: {
     blockId: string
@@ -93,13 +238,15 @@ type PromptBuilderStore = {
 
   initTemplate: (
     template: BuilderTemplate,
-    options?: { generationStepLabels?: string[] },
+    options?: { generationStepLabels?: string[]; creationBrief?: string },
   ) => void
   openPreview: () => void
   closePreview: () => void
+  setPreviewPersona: (persona: PreviewPersona) => void
   openSalesEdit: () => void
   closeSalesEdit: () => void
   setTemplateName: (name: string) => void
+  setTemplateDisplayCondition: (condition: BlockDisplayCondition) => void
   setSelectedBlockId: (id: string | null) => void
   setActiveScenario: (scenario: PreviewScenario) => void
   updateBlockContent: (blockId: string, content: Record<string, unknown>) => void
@@ -125,6 +272,7 @@ type PromptBuilderStore = {
   ) => void
   addSegment: (blockId: string, segment: ConditionalSegment) => void
   removeSegment: (blockId: string, segmentId: string) => void
+  ignoreValidationIssue: (issueId: string) => void
   sendMessage: (text: string) => void
 }
 
@@ -146,6 +294,9 @@ function agentReply(
   ) {
     return formatVariablesListReply(template)
   }
+
+  const layoutFixReply = tryLayoutFixReply(lower, template, set)
+  if (layoutFixReply) return layoutFixReply
 
   if (
     lower.includes("germany") &&
@@ -620,30 +771,53 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   template: null,
   selectedBlockId: null,
   editorMode: "edit",
+  previewPersona: "admin",
   activeScenario: PREVIEW_SCENARIOS[0],
   messages: [],
   isAgentTyping: false,
+  ignoredValidationIssueIds: [],
   pendingImagePdfImport: null,
 
   initTemplate: (template, options) => {
-    const messages = options?.generationStepLabels?.length
-      ? [
-          makeGenerationSummaryMessage(options.generationStepLabels),
-          {
-            id: "welcome",
-            role: "assistant" as const,
-            content: "Use the suggested prompts below to reshape the template, or type what you want in the chat.",
-            timestamp: new Date().toISOString(),
-          },
-        ]
-      : [
-          {
-            id: "welcome",
-            role: "assistant" as const,
-            content: DEMO_WELCOME_MESSAGE,
-            timestamp: new Date().toISOString(),
-          },
-        ]
+    const brief = options?.creationBrief?.trim()
+    const now = new Date().toISOString()
+
+    let messages: ChatMessage[]
+
+    if (brief) {
+      messages = [
+        ...(options?.generationStepLabels?.length
+          ? [makeGenerationSummaryMessage(options.generationStepLabels)]
+          : []),
+        {
+          id: "creation-user",
+          role: "user",
+          content: brief,
+          timestamp: now,
+        },
+        makeCreationBriefReply(brief),
+      ]
+    } else if (options?.generationStepLabels?.length) {
+      messages = [
+        makeGenerationSummaryMessage(options.generationStepLabels),
+        {
+          id: "welcome",
+          role: "assistant",
+          content:
+            "Use the suggested prompts below to reshape the template, or type what you want in the chat.",
+          timestamp: now,
+        },
+      ]
+    } else {
+      messages = [
+        {
+          id: "welcome",
+          role: "assistant",
+          content: DEMO_WELCOME_MESSAGE,
+          timestamp: now,
+        },
+      ]
+    }
 
     set({
       template: {
@@ -652,15 +826,20 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       },
       selectedBlockId: null,
       editorMode: "edit",
+      previewPersona: "admin",
       messages,
       activeScenario: PREVIEW_SCENARIOS[0],
       pendingImagePdfImport: null,
+      ignoredValidationIssueIds: [],
     })
   },
 
-  openPreview: () => set({ editorMode: "preview", selectedBlockId: null }),
+  openPreview: () =>
+    set({ editorMode: "preview", previewPersona: "admin", selectedBlockId: null }),
 
-  closePreview: () => set({ editorMode: "edit" }),
+  closePreview: () => set({ editorMode: "edit", previewPersona: "admin" }),
+
+  setPreviewPersona: (persona) => set({ previewPersona: persona }),
 
   openSalesEdit: () => set({ editorMode: "sales", selectedBlockId: null }),
 
@@ -671,6 +850,13 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       s.template ? { template: { ...s.template, name } } : s,
     ),
 
+  setTemplateDisplayCondition: (condition) =>
+    set((s) =>
+      s.template
+        ? { template: { ...s.template, displayCondition: condition } }
+        : s,
+    ),
+
   setSelectedBlockId: (id) => set({ selectedBlockId: id }),
 
   setActiveScenario: (scenario) => set({ activeScenario: scenario }),
@@ -679,7 +865,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
     set((s) => {
       if (!s.template) return s
       const block = findTemplateBlock(s.template, blockId)
-      if (blockLockedInSalesMode(s.editorMode, block)) return s
+      if (blockLockedInSalesMode(s.editorMode, s.previewPersona, block)) return s
       return {
         template: {
           ...s.template,
@@ -696,7 +882,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       const block = findTemplateBlock(s.template, blockId)
       if (
         field !== "locked" &&
-        blockLockedInSalesMode(s.editorMode, block)
+        blockLockedInSalesMode(s.editorMode, s.previewPersona, block)
       ) {
         return s
       }
@@ -714,7 +900,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   addBlock: (type, afterId) =>
     set((s) => {
-      if (!s.template || s.editorMode === "sales") return s
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
       const blocks = [...s.template.blocks]
       const newBlock = createStandaloneBuilderBlock(type, blocks.length)
       if (afterId === "__start__") {
@@ -736,7 +922,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   addBlockBeside: (blockId, type) =>
     set((s) => {
-      if (!s.template || s.editorMode === "sales") return s
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
       const blocks = [...s.template.blocks]
       const index = blocks.findIndex((b) => b.id === blockId)
       if (index < 0) return s
@@ -849,7 +1035,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   removeBlock: (blockId) =>
     set((s) => {
-      if (!s.template || s.editorMode === "sales") return s
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
       const blocks = normalizeBlockLayout(
         s.template.blocks.filter((b) => b.id !== blockId),
       )
@@ -865,7 +1051,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   reorderBlocks: (from, to) =>
     set((s) => {
-      if (!s.template || s.editorMode === "sales") return s
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
       const blocks = normalizeBlockLayout(arrayMove(s.template.blocks, from, to))
       return {
         template: {
@@ -907,7 +1093,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
     set((s) => {
       if (!s.template) return s
       const block = findTemplateBlock(s.template, blockId)
-      if (blockLockedInSalesMode(s.editorMode, block)) return s
+      if (blockLockedInSalesMode(s.editorMode, s.previewPersona, block)) return s
       return {
         template: {
           ...s.template,
@@ -966,6 +1152,13 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
         },
       }
     }),
+
+  ignoreValidationIssue: (issueId) =>
+    set((s) => ({
+      ignoredValidationIssueIds: s.ignoredValidationIssueIds.includes(issueId)
+        ? s.ignoredValidationIssueIds
+        : [...s.ignoredValidationIssueIds, issueId],
+    })),
 
   sendMessage: (text) => {
     const userMsg: ChatMessage = {

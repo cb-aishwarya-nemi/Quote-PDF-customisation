@@ -1,6 +1,10 @@
 import { createBuilderTemplate } from "@/lib/create-builder-template"
 import { createId } from "@/lib/create-id"
 import {
+  applyCreationContextToTemplate,
+  type CreationContext,
+} from "@/lib/derive-template-from-creation"
+import {
   buildGenerationStepLabels,
 } from "@/lib/template-generation-steps"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
@@ -14,6 +18,8 @@ export type BuilderNavigationState = {
   template?: BuilderTemplate
   fromGeneration?: boolean
   generationStepLabels?: string[]
+  creationBrief?: string
+  uploadedFileNames?: string[]
 }
 
 export function promptBuilderPath(templateId?: string) {
@@ -29,17 +35,24 @@ export function navigateToPromptBuilder(
     name?: string
     hasUploads?: boolean
     template?: BuilderTemplate
+    creationBrief?: string
+    uploadedFileNames?: string[]
   },
   templateId?: string,
 ) {
   const id = templateId ?? options?.template?.id ?? createId("tpl")
-  const template =
+  const creationContext: CreationContext = {
+    creationBrief: options?.creationBrief,
+    uploadedFileNames: options?.uploadedFileNames,
+  }
+  const baseTemplate =
     options?.template ??
     createBuilderTemplate(id, {
       variantId: options?.variantId,
       presetId: options?.presetId,
       name: options?.name ?? options?.variantName,
     })
+  const template = applyCreationContextToTemplate(baseTemplate, creationContext)
   const generationStepLabels =
     options?.hasUploads !== undefined
       ? buildGenerationStepLabels(options.hasUploads)
@@ -47,16 +60,19 @@ export function navigateToPromptBuilder(
 
   usePromptBuilderStore.getState().initTemplate(template, {
     generationStepLabels,
+    creationBrief: options?.creationBrief,
   })
   navigate(promptBuilderPath(id), {
     state: {
       variantId: options?.variantId ?? template.variantId,
       variantName: options?.variantName,
       presetId: options?.presetId ?? template.presetId,
-      name: options?.name ?? template.name,
+      name: template.name,
       template,
       fromGeneration: options?.hasUploads !== undefined,
       generationStepLabels,
+      creationBrief: options?.creationBrief,
+      uploadedFileNames: options?.uploadedFileNames,
     },
   })
 }

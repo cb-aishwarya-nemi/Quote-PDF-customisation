@@ -67,6 +67,8 @@ export type BuilderTemplate = {
   name: string
   variantId?: string
   presetId?: string
+  /** When set, template only applies to quotes matching these rules */
+  displayCondition?: BlockDisplayCondition
   blocks: BuilderBlock[]
 }
 
@@ -249,4 +251,12 @@ export function blockIsVisible(
   const rules = normalizeConditionRules(displayCondition)
   if (rules.length === 0) return true
   return rules.every((rule) => conditionMatches(rule, scenario))
+}
+
+export function templateAppliesToScenario(
+  template: BuilderTemplate | null,
+  scenario: PreviewScenario,
+): boolean {
+  if (!template) return false
+  return blockIsVisible(template.displayCondition ?? null, scenario)
 }

@@ -117,8 +117,14 @@ export function VariableOptionsMenu({
   const iconBtnClass =
     "inline-flex size-6 shrink-0 items-center justify-center rounded border border-gray-200 bg-white text-gray-500 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700"
 
+  const pillClass = `inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 font-mono text-[9px] font-medium ring-1 ring-inset transition-colors hover:brightness-95 ${badge}`
+
   return (
-    <div ref={rootRef} className="relative inline-flex">
+    <div
+      ref={rootRef}
+      className="relative inline-flex"
+      data-variable-menu-open={open ? "true" : undefined}
+    >
       {removed ? (
         <button
           type="button"
@@ -126,11 +132,12 @@ export function VariableOptionsMenu({
             e.stopPropagation()
             setOpen((v) => !v)
           }}
-          className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-600 hover:text-blue-700"
+          className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-gray-300 bg-gray-50 px-2 py-0.5 text-[9px] font-medium text-gray-600 transition hover:border-gray-400 hover:bg-gray-100"
           aria-expanded={open}
+          title="Link to a merge field"
         >
-          <Link2 className="size-3" />
-          Add variable
+          <Link2 className="size-2.5" />
+          Add field
         </button>
       ) : (
         <button
@@ -139,14 +146,12 @@ export function VariableOptionsMenu({
             e.stopPropagation()
             setOpen((v) => !v)
           }}
-          className={`cursor-pointer rounded px-1 py-px font-mono text-[9px] font-medium ring-1 ring-inset transition-colors hover:brightness-95 ${badge} ${
-            open ? "ring-2 ring-blue-300/80" : ""
-          }`}
+          className={`${pillClass} ${open ? "ring-2 ring-blue-300/80" : ""}`}
           aria-expanded={open}
           aria-haspopup="dialog"
-          title="Variable options"
+          title={`${fieldLabel} · {{${variableKey}}}`}
         >
-          {`{{${variableKey}}}`}
+          {"{ }"}
         </button>
       )}
 
