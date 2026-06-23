@@ -17,6 +17,12 @@ type FieldDef = {
 export type { FieldDef as VariableFieldDef }
 
 const BLOCK_FIELD_DEFS: Partial<Record<BuilderBlockType, FieldDef[]>> = {
+  company_address: [
+    { field: "name", key: "company.name", label: "Company name", category: "quote" },
+    { field: "address", key: "company.address", label: "Company address", category: "quote" },
+    { field: "taxId", key: "company.tax_id", label: "Tax ID", category: "quote" },
+    { field: "entity", key: "company.entity", label: "Legal entity", category: "quote" },
+  ],
   quote_summary_header: [
     { field: "quoteNumber", key: "quote.number", label: "Quote #", category: "quote" },
     { field: "issued", key: "quote.issued_date", label: "Issued date", category: "quote" },
@@ -124,6 +130,8 @@ function formatSample(value: unknown): string {
 }
 
 const BLOCK_TYPE_LABELS: Record<BuilderBlockType, string> = {
+  company_logo: "Company logo",
+  company_address: "Company address",
   quote_summary_header: "Quote summary",
   tcv_summary: "TCV summary",
   billed_to: "Billed to",
@@ -135,7 +143,7 @@ const BLOCK_TYPE_LABELS: Record<BuilderBlockType, string> = {
   custom_table: "Custom table",
   custom_image: "Image",
   signature: "Signature",
-  ae_profile: "AE profile",
+  ae_profile: "AE details",
 }
 
 export function getVariableDef(
@@ -568,7 +576,7 @@ export function formatVariablesListReply(
 ): string {
   const variables = deriveTemplateVariables(template)
   if (variables.length === 0) {
-    return "No merge fields detected yet. Add standard blocks like Quote summary or Billed to and I'll map the fields automatically."
+    return "No merge fields detected yet. Add standard blocks like Billed to or Contract details and I'll map the fields automatically."
   }
 
   const byCategory = variables.reduce(

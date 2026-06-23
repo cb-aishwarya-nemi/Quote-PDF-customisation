@@ -9,9 +9,15 @@ import type { ReactNode } from "react"
 
 type Props = {
   block: BuilderBlock
+  onPointerEnter?: () => void
+  onPointerLeave?: () => void
 }
 
-export function SortableBuilderBlock({ block }: Props) {
+export function SortableBuilderBlock({
+  block,
+  onPointerEnter,
+  onPointerLeave,
+}: Props) {
   const canEditStructure = useCanEditBlockStructure()
 
   const {
@@ -37,6 +43,8 @@ export function SortableBuilderBlock({ block }: Props) {
       ref={setNodeRef}
       style={style}
       className={`min-w-0 ${isDragging ? "relative z-10 opacity-90" : ""}`}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
     >
       <BlockChrome
         block={block}

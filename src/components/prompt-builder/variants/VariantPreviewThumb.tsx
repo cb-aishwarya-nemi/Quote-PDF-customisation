@@ -27,6 +27,31 @@ export function VariantPreviewThumb({ blockType, variantId, selected }: Props) {
     selected ? "border-cb-orange/40 bg-cb-orange/[0.04]" : "border-gray-200 bg-gray-50"
   }`
 
+  if (blockType === "company_logo") {
+    return (
+      <div className={`${shell} items-center justify-center`}>
+        <div className={`size-4 rounded ${accent}`} />
+      </div>
+    )
+  }
+
+  if (blockType === "company_address") {
+    if (variantId === "compact") {
+      return (
+        <div className={`${shell} justify-center gap-0.5`}>
+          <Bar w="w-full" className={accent} />
+        </div>
+      )
+    }
+    return (
+      <div className={`${shell} gap-0.5`}>
+        <Bar w="w-6" className={accent} />
+        <Bar w="w-full" className={faint} />
+        <Bar w="w-4" className={faint} />
+      </div>
+    )
+  }
+
   if (blockType === "quote_summary_header") {
     if (variantId === "centered") {
       return (

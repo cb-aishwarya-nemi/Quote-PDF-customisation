@@ -1,3 +1,5 @@
+import { CompanyAddressBlockView } from "@/components/prompt-builder/variants/CompanyAddressBlockView"
+import { CompanyLogoBlockView } from "@/components/prompt-builder/variants/CompanyLogoBlockView"
 import { EntitlementsBlockView } from "@/components/prompt-builder/variants/EntitlementsBlockView"
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
 import { CustomTableBlockView } from "@/components/prompt-builder/variants/CustomTableBlockView"
@@ -27,6 +29,17 @@ export function BuilderBlockView({ block }: Props) {
     updateBlockField(block.id, field, value)
 
   switch (block.type) {
+    case "company_logo":
+      return <CompanyLogoBlockView block={block} />
+
+    case "company_address":
+      return (
+        <CompanyAddressBlockView
+          block={block}
+          onField={(field, value) => onField(field, value)}
+        />
+      )
+
     case "quote_summary_header":
       return (
         <QuoteSummaryHeaderView

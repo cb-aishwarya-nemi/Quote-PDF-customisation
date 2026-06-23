@@ -1,5 +1,7 @@
 import { createId } from "@/lib/create-id"
-import { BLOCK_VARIANTS } from "@/lib/block-variants"
+import { BLOCK_VARIANTS, LOGO_VARIANTS } from "@/lib/block-variants"
+import { enforceBlockLayoutRules } from "@/lib/block-layout"
+import { defaultLayoutColumnForType } from "@/lib/block-layout-rules"
 import { blocksForSource, blocksForVariant } from "@/lib/block-catalog"
 import type {
   BuilderBlock,
@@ -9,8 +11,7 @@ import type {
 } from "@/types/prompt-builder"
 import type { BlockType } from "@/types/template"
 
-const VARIANT_TO_BUILDER: Record<BlockType, BuilderBlockType> = {
-  header: "quote_summary_header",
+const VARIANT_TO_BUILDER: Partial<Record<BlockType, BuilderBlockType>> = {
   quote_details: "contract_details",
   billed_to: "billed_to",
   company_details: "contract_details",
@@ -60,13 +61,24 @@ const defaultTermsSegments = (): ConditionalSegment[] => [
 
 function defaultContent(type: BuilderBlockType): Record<string, unknown> {
   switch (type) {
-    case "quote_summary_header":
+    case "company_logo":
       return {
         showLogo: true,
         logoVariant: "default",
+        logoUrl: "",
+        logoFileName: "",
         logoDisplayCondition: null,
-        backgroundImageUrl: "",
-        backgroundImageFileName: "",
+      }
+    case "company_address":
+      return {
+        sectionLabel: "From",
+        name: "Acme Software Inc.",
+        address: "548 Market St, Suite 400\nSan Francisco, CA 94104",
+        taxId: "Tax ID 94-1234567",
+        entity: "Acme Software Inc. (Delaware)",
+      }
+    case "quote_summary_header":
+      return {
         title: "Quote Summary",
         quoteNumber: "QT-2026-0142",
         issued: "Jun 12, 2026",
@@ -77,6 +89,8 @@ function defaultContent(type: BuilderBlockType): Record<string, unknown> {
         issuedLabel: "Issued",
         validUntilLabel: "Valid until",
         validShortLabel: "Valid",
+        backgroundImageUrl: "",
+        backgroundImageFileName: "",
       }
     case "tcv_summary":
       return {
@@ -210,7 +224,9 @@ function createBuilderBlock(type: BuilderBlockType, order: number): BuilderBlock
   const defaultVariant =
     type === "signature"
       ? (BLOCK_VARIANTS[type].find((v) => v.id === "dual_party")?.id ?? "dual_party")
-      : (BLOCK_VARIANTS[type][0]?.id ?? "classic")
+      : type === "company_logo"
+        ? (LOGO_VARIANTS[0]?.id ?? "default")
+        : (BLOCK_VARIANTS[type][0]?.id ?? "classic")
   return {
     id: createId("block"),
     type,
@@ -218,40 +234,54 @@ function createBuilderBlock(type: BuilderBlockType, order: number): BuilderBlock
     content: {
       variant: defaultVariant,
       displayCondition: null,
+      layoutColumn: defaultLayoutColumnForType(type),
       ...defaultContent(type),
     },
   }
 }
 
-function mapVariantBlock(type: BlockType, order: number): BuilderBlock {
+function mapVariantBlock(type: BlockType, order: number): BuilderBlock | null {
+  if (type === "header") return null
   const builderType = VARIANT_TO_BUILDER[type] ?? "custom_text"
   return createBuilderBlock(builderType, order)
 }
 
-/** Header first; strip legacy upload-image blocks placed above it. */
-export function normalizeBuilderBlocks(blocks: BuilderBlock[]): BuilderBlock[] {
-  const headerIndex = blocks.findIndex(
-    (block) => block.type === "quote_summary_header",
-  )
-  if (headerIndex < 0) {
-    return blocks.map((block, index) => ({ ...block, order: index }))
-  }
-
-  const withoutLeadingImages = blocks.filter((block, index) => {
-    if (index >= headerIndex) return true
-    return block.type !== "custom_image"
+function mapVariantBlocks(types: BlockType[]): BuilderBlock[] {
+  return types.flatMap((type, index) => {
+    const block = mapVariantBlock(type, index)
+    return block ? [block] : []
   })
+}
 
-  const nextHeaderIndex = withoutLeadingImages.findIndex(
-    (block) => block.type === "quote_summary_header",
+/** Stationery first; strip unsupported blocks and legacy images above stationery. */
+export function normalizeBuilderBlocks(blocks: BuilderBlock[]): BuilderBlock[] {
+  const filtered = blocks.filter((block) => block.type !== "quote_summary_header")
+
+  const STATIONERY: BuilderBlockType[] = ["company_logo", "company_address"]
+
+  const anchorIndex = filtered.findIndex((block) => STATIONERY.includes(block.type))
+  const withoutLeadingImages =
+    anchorIndex < 0
+      ? filtered
+      : filtered.filter((block, index) => {
+          if (index >= anchorIndex) return true
+          return block.type !== "custom_image"
+        })
+
+  const stationery = STATIONERY.flatMap((type) =>
+    withoutLeadingImages.filter((block) => block.type === type),
   )
-  if (nextHeaderIndex <= 0) {
-    return withoutLeadingImages.map((block, index) => ({ ...block, order: index }))
-  }
+  const rest = withoutLeadingImages.filter(
+    (block) => !STATIONERY.includes(block.type),
+  )
 
-  const header = withoutLeadingImages[nextHeaderIndex]
-  const rest = withoutLeadingImages.filter((_, index) => index !== nextHeaderIndex)
-  return [header, ...rest].map((block, index) => ({ ...block, order: index }))
+  const ordered =
+    stationery.length > 0 ? [...stationery, ...rest] : withoutLeadingImages
+
+  return enforceBlockLayoutRules(ordered).map((block, index) => ({
+    ...block,
+    order: index,
+  }))
 }
 
 export function createStandaloneBuilderBlock(
@@ -276,10 +306,9 @@ export function createBuilderTemplate(
     : []
 
   if (presetTypes.length > 0) {
-    blocks = presetTypes.map((t, i) => mapVariantBlock(t, i))
+    blocks = mapVariantBlocks(presetTypes)
   } else if (options?.variantId) {
-    const types = blocksForVariant(options.variantId)
-    blocks = types.map((t, i) => mapVariantBlock(t, i))
+    blocks = mapVariantBlocks(blocksForVariant(options.variantId))
 
     if (options.variantId === "v1") {
       const pricing = blocks.find((b) => b.type === "pricing")
@@ -293,15 +322,16 @@ export function createBuilderTemplate(
     }
   } else {
     blocks = [
-      createBuilderBlock("quote_summary_header", 0),
-      createBuilderBlock("billed_to", 1),
-      createBuilderBlock("contract_details", 2),
-      createBuilderBlock("pricing", 3),
-      createBuilderBlock("entitlements", 4),
-      createBuilderBlock("tcv_summary", 5),
+      createBuilderBlock("company_logo", 0),
+      createBuilderBlock("company_address", 1),
+      createBuilderBlock("tcv_summary", 2),
+      createBuilderBlock("billed_to", 3),
+      createBuilderBlock("contract_details", 4),
+      createBuilderBlock("pricing", 5),
       createBuilderBlock("terms", 6),
-      createBuilderBlock("signature", 7),
-      createBuilderBlock("ae_profile", 8),
+      createBuilderBlock("entitlements", 7),
+      createBuilderBlock("signature", 8),
+      createBuilderBlock("ae_profile", 9),
     ]
   }
 

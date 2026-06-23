@@ -1,3 +1,4 @@
+import { BlockWidthControl } from "@/components/prompt-builder/BlockWidthControl"
 import { ConditionBuilderPanel } from "@/components/prompt-builder/ConditionBuilderPanel"
 import { HeaderBackgroundControls } from "@/components/prompt-builder/HeaderBackgroundControls"
 import { VariantPicker } from "@/components/prompt-builder/VariantPicker"
@@ -70,6 +71,24 @@ export function BlockChrome({
 
   const showAdminControls = canEditStructure
 
+  const shellClasses = (() => {
+    const base = "relative min-w-0 rounded-xl border bg-white transition-all"
+
+    if (isSelected) {
+      return `${base} border-blue-400 shadow-[0_8px_24px_-4px_rgba(37,99,235,0.18)]`
+    }
+
+    if (isLocked && isSales) {
+      return `${base} border-transparent bg-slate-50/40 hover:border-blue-200 hover:shadow-sm`
+    }
+
+    if (hasLayoutHint) {
+      return `${base} border-transparent hover:border-amber-300 hover:shadow-sm`
+    }
+
+    return `${base} border-transparent hover:border-blue-200 hover:shadow-sm`
+  })()
+
   return (
     <div className={`group/block relative ${isDragging ? "opacity-95" : ""}`}>
       {showAdminControls && dragHandleProps && (
@@ -86,15 +105,7 @@ export function BlockChrome({
 
       <div
         ref={menuRef}
-        className={`relative min-w-0 rounded-xl border bg-white transition-all ${
-          isSelected
-            ? "border-blue-400 ring-2 ring-blue-100"
-            : hasLayoutHint
-              ? "border-amber-300 ring-2 ring-amber-100"
-              : isLocked && isSales
-                ? "border-slate-300 bg-slate-50/40"
-                : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
-        }`}
+        className={shellClasses}
         onClick={() => setSelectedBlockId(block.id)}
         onKeyDown={(e) => {
           if (e.key === "Enter") setSelectedBlockId(block.id)
@@ -103,7 +114,16 @@ export function BlockChrome({
         tabIndex={0}
       >
         {showAdminControls && (
-          <div className="pointer-events-none absolute right-2 top-2 z-20 flex items-center gap-1 opacity-0 transition-opacity group-hover/block:opacity-100 group-focus-within/block:opacity-100">
+          <div
+            className={`pointer-events-none absolute right-2 top-2 z-20 flex items-center gap-1 transition-opacity ${
+              isSelected
+                ? "opacity-100"
+                : "opacity-0 group-hover/block:opacity-100 group-focus-within/block:opacity-100"
+            }`}
+          >
+            <div className="pointer-events-auto">
+              <BlockWidthControl block={block} />
+            </div>
             {hasVariants && (
               <div className="relative pointer-events-auto">
                 <button

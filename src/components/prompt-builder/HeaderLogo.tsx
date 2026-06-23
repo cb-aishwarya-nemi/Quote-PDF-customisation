@@ -66,7 +66,7 @@ export function HeaderLogo({ block, centered = false, compact = false }: Props) 
   const showLogo = content.showLogo !== false
   const logoUrl = typeof content.logoUrl === "string" ? content.logoUrl : ""
   const hasUploadedLogo = logoUrl.length > 0
-  const logoVariant = String(content.logoVariant ?? "default")
+  const logoVariant = String(content.logoVariant ?? content.variant ?? "default")
   const { box: sizeClass, mark: markClass } = logoSizeClasses(logoVariant, compact)
   const initials = companyInitials(mockBusinessProfile.companyName)
   const logoDisplayCondition = (content.logoDisplayCondition ??

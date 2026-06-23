@@ -1,7 +1,6 @@
 import { EditableLabel, SectionLabel } from "@/components/prompt-builder/EditableLabel"
 import { HeaderBackgroundShell } from "@/components/prompt-builder/HeaderBackgroundShell"
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
-import { HeaderLogo } from "@/components/prompt-builder/HeaderLogo"
 import { VariableField } from "@/components/prompt-builder/VariableField"
 import { DEFAULT_LABELS, staticLabel } from "@/lib/block-static-labels"
 import type { BuilderBlock } from "@/types/prompt-builder"
@@ -26,7 +25,6 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
   if (variant === "centered") {
     return (
       <HeaderBackgroundShell block={block} variant="centered">
-        <HeaderLogo block={block} centered />
         <InlineEditable
           blockId={block.id}
           value={String(c.title ?? "Quote Summary")}
@@ -108,7 +106,6 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
   if (variant === "minimal") {
     return (
       <HeaderBackgroundShell block={block} variant="minimal">
-        <HeaderLogo block={block} compact />
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-2 text-[13px] text-gray-700">
         <InlineEditable
           blockId={block.id}
@@ -175,7 +172,6 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
 
   return (
     <HeaderBackgroundShell block={block} variant="classic">
-      <HeaderLogo block={block} />
       <InlineEditable
         blockId={block.id}
         value={String(c.title ?? "Quote Summary")}

@@ -26,16 +26,10 @@ export function applyAgentDemoChanges(actions: DemoStoreActions): string[] {
 
   const changes: string[] = []
 
-  const header = template.blocks.find((b) => b.type === "quote_summary_header")
   const tcv = template.blocks.find((b) => b.type === "tcv_summary")
   const terms = template.blocks.find((b) => b.type === "terms")
   const pricing = template.blocks.find((b) => b.type === "pricing")
   const pricingId = pricing?.id
-
-  if (header && String(header.content.variant ?? "classic") !== "centered") {
-    actions.setBlockVariant(header.id, "centered")
-    changes.push("Centered the quote summary header")
-  }
 
   if (tcv) {
     if (String(tcv.content.variant ?? "classic") !== "cards") {

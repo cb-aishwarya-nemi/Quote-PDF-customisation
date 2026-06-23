@@ -2,6 +2,8 @@ import { BLOCK_TYPE_LABELS } from "@/lib/derive-template-variables"
 import type { BuilderBlock, BuilderTemplate } from "@/types/prompt-builder"
 
 const BLOCK_ACCENT: Record<string, string> = {
+  company_logo: "bg-[#012A38]",
+  company_address: "bg-slate-400/70",
   quote_summary_header: "bg-blue-500/70",
   tcv_summary: "bg-[#012A38]",
   billed_to: "bg-violet-400/70",

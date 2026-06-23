@@ -7,6 +7,35 @@ export type BlockVariantOption = {
 }
 
 export const BLOCK_VARIANTS: Record<BuilderBlockType, BlockVariantOption[]> = {
+  company_logo: [
+    {
+      id: "default",
+      label: "Default",
+      description: "Standard logo size",
+    },
+    {
+      id: "wide",
+      label: "Wide",
+      description: "Wider logo area for horizontal marks",
+    },
+    {
+      id: "compact",
+      label: "Compact",
+      description: "Smaller logo mark",
+    },
+  ],
+  company_address: [
+    {
+      id: "standard",
+      label: "Standard",
+      description: "Company name, address, and tax details",
+    },
+    {
+      id: "compact",
+      label: "Compact",
+      description: "Single-line name and address",
+    },
+  ],
   quote_summary_header: [
     {
       id: "classic",
@@ -228,18 +257,19 @@ export const ADDABLE_BLOCKS: {
   label: string
   group: "standard" | "custom"
 }[] = [
-  { type: "quote_summary_header", label: "Quote summary", group: "standard" },
+  { type: "company_logo", label: "Company logo", group: "standard" },
+  { type: "company_address", label: "Company address", group: "standard" },
   { type: "tcv_summary", label: "TCV summary", group: "standard" },
   { type: "billed_to", label: "Billed to", group: "standard" },
   { type: "contract_details", label: "Contract details", group: "standard" },
   { type: "pricing", label: "Pricing table", group: "standard" },
-  { type: "entitlements", label: "Entitlements", group: "standard" },
   { type: "terms", label: "Terms & conditions", group: "standard" },
+  { type: "entitlements", label: "Entitlements", group: "standard" },
   { type: "custom_text", label: "Text", group: "custom" },
   { type: "custom_table", label: "Table", group: "custom" },
   { type: "custom_image", label: "Image / PDF", group: "custom" },
-  { type: "signature", label: "Signature", group: "custom" },
-  { type: "ae_profile", label: "AE profile", group: "custom" },
+  { type: "signature", label: "Signature", group: "standard" },
+  { type: "ae_profile", label: "AE details", group: "standard" },
 ]
 
 export function getVariantLabel(

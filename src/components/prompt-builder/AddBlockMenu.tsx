@@ -65,17 +65,25 @@ function BlockMenuSection({
 type Props = {
   onAdd: (type: BuilderBlockType) => void
   align?: "center" | "right"
+  allowedTypes?: BuilderBlockType[]
   children: (openMenu: (e: ReactMouseEvent<HTMLButtonElement>) => void) => ReactNode
 }
 
-export function AddBlockMenu({ onAdd, align = "center", children }: Props) {
+export function AddBlockMenu({ onAdd, align = "center", allowedTypes, children }: Props) {
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 })
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const standardBlocks = ADDABLE_BLOCKS.filter((b) => b.group === "standard")
-  const customBlocks = ADDABLE_BLOCKS.filter((b) => b.group === "custom")
+  const standardBlocks = ADDABLE_BLOCKS.filter(
+    (b) =>
+      b.group === "standard" &&
+      (!allowedTypes || allowedTypes.includes(b.type)),
+  )
+  const customBlocks = ADDABLE_BLOCKS.filter(
+    (b) =>
+      b.group === "custom" && (!allowedTypes || allowedTypes.includes(b.type)),
+  )
 
   const updatePosition = useCallback(() => {
     const btn = triggerRef.current

@@ -9,6 +9,39 @@
 
 ---
 
+## Canvas layout grid
+
+The quote document canvas uses a **strict 2-column grid** only. Blocks are either **50%** (half — one column) or **100%** (full — spans both columns). There is no 3-column or free-form layout.
+
+Layout is stored per block as `content.layoutColumn`:
+- `'full'` — 100% width row
+- `'left'` + adjacent `'right'` — paired 50% / 50% row
+- `'left'` alone — 50% width with empty right column (half_or_full blocks only)
+
+### Allowed width by block
+
+| Block | Attributes / merge vars | Width |
+|-------|----------------------|-------|
+| Company logo | Logo / image | **50% only** |
+| Company address | Address lines (org address from business profile) | **50% only** |
+| Quote summary | Quote #, date, expiry, customer id, payment terms | 50% or 100% |
+| TCV summary | TC value, billing cycles, first billing amount | 50% or 100% |
+| Billed to | Customer name, address, zip, city (billing address) | 50% or 100% |
+| Contract details | Sub id, dates, length, frequency, billing cycles, contract TCV, renewal | 50% or 100% |
+| Pricing table | Items, ramps, summary per period | **100% only** |
+| Terms & conditions | Conditional legal segments | **100% only** |
+| Entitlements | Feature, included, notes | 50% or 100% |
+| Signature | Customer, vendor, date for each | 50% or 100% |
+| AE details | Name, email, photo | 50% or 100% |
+
+Implementation: `src/lib/block-layout-rules.ts` (`BLOCK_WIDTH_RULES`, `BLOCK_LAYOUT_ATTRIBUTES`). Enforced in `src/lib/block-layout.ts` via `normalizeBlockLayout`, `canAddBesideBlock`, and `setBlockCanvasWidth`.
+
+Default blank template pairs **Company logo** (left) + **Company address** (right) in the first row. Pricing and terms are always full width.
+
+Hover a block → **50% / 100%** control in block chrome toggles width when the block allows both.
+
+---
+
 ## Data types
 
 ```ts

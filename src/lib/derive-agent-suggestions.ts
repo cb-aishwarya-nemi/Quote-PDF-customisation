@@ -16,7 +16,8 @@ export type AgentSuggestion = {
 }
 
 const BLOCK_LABELS: Record<string, string> = {
-  quote_summary_header: "quote summary",
+  company_logo: "company logo",
+  company_address: "company address",
   tcv_summary: "TCV summary",
   billed_to: "billed to",
   contract_details: "contract details",
@@ -27,7 +28,7 @@ const BLOCK_LABELS: Record<string, string> = {
   custom_table: "table",
   custom_image: "image block",
   signature: "signature",
-  ae_profile: "AE profile",
+  ae_profile: "AE details",
 }
 
 function hasBlock(template: BuilderTemplate, type: BuilderBlock["type"]) {
@@ -247,22 +248,6 @@ export function deriveAgentSuggestions(input: {
 
   if (selected) {
     switch (selected.type) {
-      case "quote_summary_header":
-        suggestVariant(
-          suggestions,
-          selected,
-          "centered",
-          "Centered header",
-          usedPrompts,
-        )
-        suggestVariant(
-          suggestions,
-          selected,
-          "minimal",
-          "Minimal header",
-          usedPrompts,
-        )
-        break
       case "tcv_summary":
         suggestVariant(
           suggestions,

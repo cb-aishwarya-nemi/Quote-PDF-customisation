@@ -1,8 +1,7 @@
 import {
   findBlockIndex,
 } from "@/lib/block-layout-helpers"
-import { BLOCK_TYPE_LABELS } from "@/lib/derive-template-variables"
-import type { BuilderBlock, BuilderBlockType, BuilderTemplate } from "@/types/prompt-builder"
+import type { BuilderBlock, BuilderTemplate } from "@/types/prompt-builder"
 
 export type TemplateValidationIssue = {
   id: string
@@ -24,10 +23,6 @@ const CLOSING_BLOCK_TYPES: BuilderBlock["type"][] = [
   "entitlements",
 ]
 
-function label(type: BuilderBlockType): string {
-  return BLOCK_TYPE_LABELS[type] ?? type
-}
-
 function pushIssue(
   issues: TemplateValidationIssue[],
   issue: TemplateValidationIssue,
@@ -44,29 +39,13 @@ export function deriveTemplateValidationIssues(
   const issues: TemplateValidationIssue[] = []
   const blocks = template.blocks
 
-  const headerIndex = findBlockIndex(blocks, "quote_summary_header")
   const billedToIndex = findBlockIndex(blocks, "billed_to")
   const contractIndex = findBlockIndex(blocks, "contract_details")
   const pricingIndex = findBlockIndex(blocks, "pricing")
   const tcvIndex = findBlockIndex(blocks, "tcv_summary")
-  const entitlementsIndex = findBlockIndex(blocks, "entitlements")
   const termsIndex = findBlockIndex(blocks, "terms")
   const signatureIndex = findBlockIndex(blocks, "signature")
   const aeIndex = findBlockIndex(blocks, "ae_profile")
-
-  if (headerIndex > 0) {
-    const first = blocks[0]
-    pushIssue(issues, {
-      id: "header-not-first",
-      severity: "warning",
-      message: `${label(first.type)} is first, but quotes usually open with the summary header. Move the header to the top?`,
-      blockId: blocks[headerIndex].id,
-      action: {
-        label: "Move header to top",
-        prompt: "Move the quote summary header to the top",
-      },
-    })
-  }
 
   if (pricingIndex >= 0 && billedToIndex >= 0 && pricingIndex < billedToIndex) {
     pushIssue(issues, {
@@ -96,43 +75,13 @@ export function deriveTemplateValidationIssues(
     })
   }
 
-  if (tcvIndex >= 0 && pricingIndex >= 0 && tcvIndex < pricingIndex) {
-    pushIssue(issues, {
-      id: "tcv-before-pricing",
-      severity: "warning",
-      message:
-        "Total contract value appears before line-item pricing. Buyers may fixate on TCV too early — move it after pricing?",
-      blockId: blocks[tcvIndex].id,
-      action: {
-        label: "Move TCV after pricing",
-        prompt: "Move TCV summary after the pricing table",
-      },
-    })
-  } else if (tcvIndex >= 0 && tcvIndex <= 2) {
+  if (tcvIndex >= 0 && tcvIndex <= 1) {
     pushIssue(issues, {
       id: "tcv-too-early",
-      severity: "warning",
+      severity: "info",
       message:
-        "Total contract value is near the top of the quote. Placing TCV after pricing avoids early sticker shock — move it down?",
+        "Total contract value is near the top of the quote. Most templates place TCV after customer and contract sections.",
       blockId: blocks[tcvIndex].id,
-      action: {
-        label: "Move TCV after pricing",
-        prompt: "Move TCV summary after the pricing table",
-      },
-    })
-  }
-
-  if (entitlementsIndex >= 0 && pricingIndex >= 0 && entitlementsIndex < pricingIndex) {
-    pushIssue(issues, {
-      id: "entitlements-before-pricing",
-      severity: "warning",
-      message:
-        "Entitlements are listed before line-item pricing. Buyers typically see prices first — move entitlements down?",
-      blockId: blocks[entitlementsIndex].id,
-      action: {
-        label: "Move entitlements down",
-        prompt: "Move entitlements after the pricing table",
-      },
     })
   }
 
@@ -265,20 +214,6 @@ export function deriveLayoutVisualHints(
 
   for (const issue of issues) {
     switch (issue.id) {
-      case "header-not-first": {
-        const headerIndex = findBlockIndex(blocks, "quote_summary_header")
-        if (headerIndex > 0) {
-          addBlockHint(blockHints, blocks[0].id, {
-            issueId: issue.id,
-            canvasMessage: "Quotes usually open with the summary header",
-          })
-          addBlockHint(blockHints, blocks[headerIndex].id, {
-            issueId: issue.id,
-            canvasMessage: "Move this header to the top",
-          })
-        }
-        break
-      }
       case "pricing-before-billed-to": {
         const pricingIndex = findBlockIndex(blocks, "pricing")
         const billedToIndex = findBlockIndex(blocks, "billed_to")
@@ -313,23 +248,12 @@ export function deriveLayoutVisualHints(
         }
         break
       }
-      case "tcv-before-pricing":
       case "tcv-too-early": {
         const tcvIndex = findBlockIndex(blocks, "tcv_summary")
         if (tcvIndex >= 0) {
           addBlockHint(blockHints, blocks[tcvIndex].id, {
             issueId: issue.id,
-            canvasMessage: "TCV usually comes after pricing",
-          })
-        }
-        break
-      }
-      case "entitlements-before-pricing": {
-        const entitlementsIndex = findBlockIndex(blocks, "entitlements")
-        if (entitlementsIndex >= 0) {
-          addBlockHint(blockHints, blocks[entitlementsIndex].id, {
-            issueId: issue.id,
-            canvasMessage: "Entitlements usually follow pricing",
+            canvasMessage: "TCV usually follows customer and contract sections",
           })
         }
         break

@@ -92,17 +92,6 @@ export function deriveTemplateName(context: CreationContext): string {
   return DEFAULT_QUOTE_TEMPLATE_NAME
 }
 
-function deriveHeaderTitle(context: CreationContext, templateName: string): string {
-  const brief = context.creationBrief?.toLowerCase() ?? ""
-  if (/amendment/i.test(brief)) return "Amendment summary"
-  if (/renewal/i.test(brief)) return "Renewal summary"
-  if (/termination|wind.?down/i.test(brief)) return "Termination summary"
-  if (/one.?pager|compact/i.test(brief)) return "Quote overview"
-
-  const base = stripTrailingQuote(templateName)
-  return base ? `${base} summary` : "Quote summary"
-}
-
 export function applyCreationContextToTemplate(
   template: BuilderTemplate,
   context: CreationContext,
@@ -113,23 +102,9 @@ export function applyCreationContextToTemplate(
 
   if (!hasContext) return template
 
-  const name = deriveTemplateName(context)
-  const headerTitle = deriveHeaderTitle(context, name)
-
-  const blocks = template.blocks.map((block) => {
-    if (block.type !== "quote_summary_header") return block
-    return {
-      ...block,
-      content: {
-        ...block.content,
-        title: headerTitle,
-      },
-    }
-  })
-
   return {
     ...template,
-    name,
-    blocks: normalizeBuilderBlocks(blocks),
+    name: deriveTemplateName(context),
+    blocks: normalizeBuilderBlocks(template.blocks),
   }
 }

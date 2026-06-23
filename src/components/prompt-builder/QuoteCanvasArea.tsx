@@ -20,7 +20,9 @@ import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import { CANVAS_DOCUMENT_MAX_WIDTH } from "@/lib/canvas-constants"
 import {
   canAddBesideBlock,
+  getLayoutColumn,
   groupBlocksForLayout,
+  type BlockLayoutRow,
 } from "@/lib/block-layout"
 import { signatureBlockNeedsPageBreak } from "@/lib/template-validation"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
@@ -39,7 +41,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
-import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { describeConditionRules, hasConditions } from "@/lib/segment-conditions"
 
 function useFloatingActionsOnScrollUp(
@@ -89,6 +91,18 @@ function useFloatingActionsOnScrollUp(
   return showFloating
 }
 
+const INSERT_AT_START = "__start__"
+
+function blockIdsForRow(row: BlockLayoutRow): string[] {
+  if (row.type === "pair") return [row.left.id, row.right.id]
+  return [row.block.id]
+}
+
+function lastBlockIdForRow(row: BlockLayoutRow): string {
+  if (row.type === "pair") return row.right.id
+  return row.block.id
+}
+
 function renderPreviewRow(
   row: ReturnType<typeof groupBlocksForLayout>[number],
   activeScenario: Parameters<typeof blockIsVisible>[1],
@@ -131,6 +145,24 @@ function renderPreviewRow(
     activeScenario,
   )
   if (!visible) return null
+
+  if (getLayoutColumn(row.block.content) === "left") {
+    return (
+      <div key={key} className="grid grid-cols-2 items-start gap-4">
+        <PreviewBlockCell block={row.block} interactive={interactive} />
+      </div>
+    )
+  }
+
+  if (getLayoutColumn(row.block.content) === "right") {
+    return (
+      <div key={key} className="grid grid-cols-2 items-start gap-4">
+        <div />
+        <PreviewBlockCell block={row.block} interactive={interactive} />
+      </div>
+    )
+  }
+
   return <PreviewBlockCell key={key} block={row.block} interactive={interactive} />
 }
 
@@ -171,6 +203,7 @@ export function QuoteCanvasArea() {
   const editorMode = usePromptBuilderStore((s) => s.editorMode)
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
   const reorderBlocks = usePromptBuilderStore((s) => s.reorderBlocks)
+  const selectedBlockId = usePromptBuilderStore((s) => s.selectedBlockId)
   const clearSelection = usePromptBuilderStore((s) => s.setSelectedBlockId)
   const isPreview = editorMode === "preview"
   const isSalesPreview = useIsSalesPreview()
@@ -178,6 +211,30 @@ export function QuoteCanvasArea() {
 
   const [activeDragBlock, setActiveDragBlock] = useState<BuilderBlock | null>(
     null,
+  )
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null)
+  const [hoveredInsertKey, setHoveredInsertKey] = useState<string | null>(null)
+
+  const isInsertRevealed = useCallback(
+    (insertKey: string, neighborBlockIds: string[]) => {
+      if (hoveredInsertKey === insertKey) return true
+      if (selectedBlockId && neighborBlockIds.includes(selectedBlockId)) {
+        return true
+      }
+      if (hoveredBlockId && neighborBlockIds.includes(hoveredBlockId)) {
+        return true
+      }
+      return false
+    },
+    [hoveredInsertKey, selectedBlockId, hoveredBlockId],
+  )
+
+  const blockHoverHandlers = useCallback(
+    (blockId: string) => ({
+      onPointerEnter: () => setHoveredBlockId(blockId),
+      onPointerLeave: () => setHoveredBlockId(null),
+    }),
+    [],
   )
 
   const sensors = useSensors(
@@ -230,15 +287,48 @@ export function QuoteCanvasArea() {
   const editCanvas = (
     <>
       <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
-        {layoutRows.map((row) => {
+        {!isSales && layoutRows.length > 0 && (
+          <AddBlockDivider
+            atStart
+            visible={isInsertRevealed(
+              INSERT_AT_START,
+              blockIdsForRow(layoutRows[0]),
+            )}
+            onInsertHover={(active) =>
+              setHoveredInsertKey(active ? INSERT_AT_START : null)
+            }
+          />
+        )}
+        {layoutRows.map((row, rowIndex) => {
+        const currentBlockIds = blockIdsForRow(row)
+        const nextRow =
+          rowIndex < layoutRows.length - 1 ? layoutRows[rowIndex + 1] : null
+        const nextBlockIds = nextRow ? blockIdsForRow(nextRow) : []
+        const insertAfterId = lastBlockIdForRow(row)
+        const insertNeighbors = [...currentBlockIds, ...nextBlockIds]
+
         if (row.type === "pair") {
           return (
             <Fragment key={`${row.left.id}-${row.right.id}`}>
               <BuilderBlockRow>
-                <SortableBuilderBlock block={row.left} />
-                <SortableBuilderBlock block={row.right} />
+                <SortableBuilderBlock
+                  block={row.left}
+                  {...blockHoverHandlers(row.left.id)}
+                />
+                <SortableBuilderBlock
+                  block={row.right}
+                  {...blockHoverHandlers(row.right.id)}
+                />
               </BuilderBlockRow>
-              {!isSales && <AddBlockDivider afterId={row.right.id} />}
+              {!isSales && (
+                <AddBlockDivider
+                  afterId={insertAfterId}
+                  visible={isInsertRevealed(insertAfterId, insertNeighbors)}
+                  onInsertHover={(active) =>
+                    setHoveredInsertKey(active ? insertAfterId : null)
+                  }
+                />
+              )}
             </Fragment>
           )
         }
@@ -246,21 +336,34 @@ export function QuoteCanvasArea() {
         const blockIndex = blocks.findIndex((entry) => entry.id === row.block.id)
         const nextBlock = blocks[blockIndex + 1]
         const showBesideAdd = !isSales && canAddBesideBlock(row.block, nextBlock)
+        const layoutColumn = getLayoutColumn(row.block.content)
+        const halfColumn = layoutColumn === "left" || layoutColumn === "right"
 
         return (
           <Fragment key={row.block.id}>
             <div
-              className={`group/row relative ${row.block.type === "billed_to" ? "pr-2" : ""}`}
+              className={`group/row relative ${
+                halfColumn ? "grid grid-cols-2 items-start gap-4" : ""
+              }`}
             >
-              <SortableBuilderBlock block={row.block} />
+              {layoutColumn === "right" && <div aria-hidden />}
+              <SortableBuilderBlock
+                block={row.block}
+                {...blockHoverHandlers(row.block.id)}
+              />
               {showBesideAdd && (
-                <AddBesideBlockDivider
-                  blockId={row.block.id}
-                  alwaysVisible={row.block.type === "billed_to"}
-                />
+                <AddBesideBlockDivider blockId={row.block.id} />
               )}
             </div>
-            {!isSales && <AddBlockDivider afterId={row.block.id} />}
+            {!isSales && (
+              <AddBlockDivider
+                afterId={insertAfterId}
+                visible={isInsertRevealed(insertAfterId, insertNeighbors)}
+                onInsertHover={(active) =>
+                  setHoveredInsertKey(active ? insertAfterId : null)
+                }
+              />
+            )}
           </Fragment>
         )
       })}

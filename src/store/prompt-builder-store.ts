@@ -11,16 +11,19 @@ import {
   segmentHasConditionValue,
 } from "@/lib/segment-conditions"
 import { createStandaloneBuilderBlock, normalizeBuilderBlocks } from "@/lib/create-builder-template"
+import { ADDABLE_BLOCKS } from "@/lib/block-variants"
 import {
   findBlockIndex,
   moveBlockAfterType,
   moveBlockBeforeType,
-  moveBlockToStart,
 } from "@/lib/block-layout-helpers"
 import {
-  normalizeBlockLayout,
+  blocksAreActivePair,
+  enforceBlockLayoutRules,
+  setBlockCanvasWidth as applyBlockCanvasWidth,
   setBlockLayoutColumn,
 } from "@/lib/block-layout"
+import { canBlocksFormPair } from "@/lib/block-layout-rules"
 import {
   formatVariablesListReply,
 } from "@/lib/derive-template-variables"
@@ -107,7 +110,7 @@ function applyBlockOrder(
     return {
       template: {
         ...s.template,
-        blocks: normalizeBlockLayout(blocks).map((block, index) => ({
+        blocks: enforceBlockLayoutRules(blocks).map((block, index) => ({
           ...block,
           order: index,
         })),
@@ -135,17 +138,6 @@ function tryLayoutFixReply(
     return message
   }
 
-  if (
-    (lower.includes("quote summary") || lower.includes("summary header")) &&
-    lower.includes("top")
-  ) {
-    return apply(
-      moveBlockToStart(template.blocks, "quote_summary_header"),
-      "Moved the quote summary header to the top.",
-      "quote_summary_header",
-    )
-  }
-
   if (lower.includes("billed to") && lower.includes("before") && lower.includes("pricing")) {
     return apply(
       moveBlockBeforeType(template.blocks, "billed_to", "pricing"),
@@ -171,6 +163,18 @@ function tryLayoutFixReply(
       moveBlockAfterType(template.blocks, "tcv_summary", "pricing"),
       "Moved the TCV summary after pricing so buyers see line items before the total.",
       "tcv_summary",
+    )
+  }
+
+  if (
+    lower.includes("entitlements") &&
+    lower.includes("after") &&
+    (lower.includes("terms") || lower.includes("conditions"))
+  ) {
+    return apply(
+      moveBlockAfterType(template.blocks, "entitlements", "terms"),
+      "Moved entitlements after terms and conditions.",
+      "entitlements",
     )
   }
 
@@ -258,6 +262,7 @@ type PromptBuilderStore = {
   clearPendingImagePdfImport: () => void
   removeBlock: (blockId: string) => void
   reorderBlocks: (from: number, to: number) => void
+  setBlockCanvasWidth: (blockId: string, width: "half" | "full") => void
   setBlockVariant: (blockId: string, variant: string) => void
   setBlockDisplayCondition: (
     blockId: string,
@@ -313,15 +318,15 @@ function agentReply(
   }
 
   if (lower.includes("remind") && lower.includes("logo")) {
-    const header = findBlockByType(template, "quote_summary_header")
-    if (header) set({ selectedBlockId: header.id })
-    return "Your company logo appears at the top of the quote summary header — it uses your brand from setup."
+    const logoBlock = findBlockByType(template, "company_logo")
+    if (logoBlock) set({ selectedBlockId: logoBlock.id })
+    return "Your company logo is the first block on the quote — click it to upload or replace your mark."
   }
 
   if (lower.includes("image block") || (lower.includes("logo") && lower.includes("add"))) {
-    const header = findBlockByType(template, "quote_summary_header")
-    if (header) set({ selectedBlockId: header.id })
-    return "Logo placement is in the quote summary header at the top of the document."
+    const logoBlock = findBlockByType(template, "company_logo")
+    if (logoBlock) set({ selectedBlockId: logoBlock.id })
+    return "Logo placement is in the Company logo block at the top of the document."
   }
 
   const variantMatchers: {
@@ -341,18 +346,6 @@ function agentReply(
       type: "tcv_summary",
       variantId: "inline",
       label: "TCV summary",
-    },
-    {
-      match: (s) => s.includes("centered") && s.includes("header"),
-      type: "quote_summary_header",
-      variantId: "centered",
-      label: "quote summary",
-    },
-    {
-      match: (s) => s.includes("minimal") && s.includes("header"),
-      type: "quote_summary_header",
-      variantId: "minimal",
-      label: "quote summary",
     },
     {
       match: (s) => s.includes("split") && s.includes("billed"),
@@ -687,9 +680,10 @@ function agentReply(
   if (lower.includes("entitlement")) {
     const hasEnt = template.blocks.some((b) => b.type === "entitlements")
     if (!hasEnt) {
+      const terms = findBlockByType(template, "terms")
       const pricing = findBlockByType(template, "pricing")
-      get().addBlock("entitlements", pricing?.id)
-      return "Added an entitlements block after pricing to explain what's included in the offer."
+      get().addBlock("entitlements", terms?.id ?? pricing?.id)
+      return "Added an entitlements block after terms to explain what's included in the offer."
     }
     set({
       selectedBlockId: findBlockByType(template, "entitlements")?.id ?? null,
@@ -901,6 +895,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   addBlock: (type, afterId) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
+      if (!ADDABLE_BLOCKS.some((entry) => entry.type === type)) return s
       const blocks = [...s.template.blocks]
       const newBlock = createStandaloneBuilderBlock(type, blocks.length)
       if (afterId === "__start__") {
@@ -914,7 +909,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       return {
         template: {
           ...s.template,
-          blocks: normalizeBlockLayout(blocks).map((b, i) => ({ ...b, order: i })),
+          blocks: enforceBlockLayoutRules(blocks).map((b, i) => ({ ...b, order: i })),
         },
         selectedBlockId: newBlock.id,
       }
@@ -923,13 +918,15 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   addBlockBeside: (blockId, type) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
+      if (!ADDABLE_BLOCKS.some((entry) => entry.type === type)) return s
       const blocks = [...s.template.blocks]
       const index = blocks.findIndex((b) => b.id === blockId)
       if (index < 0) return s
 
       const leftBlock = blocks[index]
       const nextBlock = blocks[index + 1]
-      if (nextBlock && String(nextBlock.content.layoutColumn) === "right") return s
+      if (nextBlock && blocksAreActivePair(leftBlock, nextBlock)) return s
+      if (!canBlocksFormPair(leftBlock, type)) return s
 
       blocks[index] = setBlockLayoutColumn(leftBlock, "left")
       const newBlock = setBlockLayoutColumn(
@@ -941,7 +938,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       return {
         template: {
           ...s.template,
-          blocks: normalizeBlockLayout(blocks).map((b, i) => ({ ...b, order: i })),
+          blocks: enforceBlockLayoutRules(blocks).map((b, i) => ({ ...b, order: i })),
         },
         selectedBlockId: newBlock.id,
       }
@@ -1036,7 +1033,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   removeBlock: (blockId) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
-      const blocks = normalizeBlockLayout(
+      const blocks = enforceBlockLayoutRules(
         s.template.blocks.filter((b) => b.id !== blockId),
       )
       return {
@@ -1052,7 +1049,19 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   reorderBlocks: (from, to) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
-      const blocks = normalizeBlockLayout(arrayMove(s.template.blocks, from, to))
+      const blocks = enforceBlockLayoutRules(arrayMove(s.template.blocks, from, to))
+      return {
+        template: {
+          ...s.template,
+          blocks: blocks.map((b, i) => ({ ...b, order: i })),
+        },
+      }
+    }),
+
+  setBlockCanvasWidth: (blockId, width) =>
+    set((s) => {
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
+      const blocks = applyBlockCanvasWidth(s.template.blocks, blockId, width)
       return {
         template: {
           ...s.template,

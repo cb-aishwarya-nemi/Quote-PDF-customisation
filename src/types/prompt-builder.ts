@@ -20,6 +20,8 @@ export type TemplateVariable = {
 }
 
 export type BuilderBlockType =
+  | "company_logo"
+  | "company_address"
   | "quote_summary_header"
   | "tcv_summary"
   | "billed_to"
