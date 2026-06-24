@@ -5,7 +5,7 @@ import { describeConditionRulesShort } from "@/lib/segment-conditions"
 import type { PublishedBuilderTemplate } from "@/store/template-library-store"
 import type { BlockDisplayCondition } from "@/types/prompt-builder"
 import type { TemplateStatus } from "@/types/template"
-import { Copy, Ellipsis, Pencil, Trash2 } from "lucide-react"
+import { Copy, Ellipsis, Eye, Pencil, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 type Props = {
@@ -68,22 +68,16 @@ export function PublishedTemplateCard({
 
   return (
     <article
-      role={isDefault ? undefined : "button"}
-      tabIndex={isDefault ? undefined : 0}
-      onClick={isDefault ? undefined : onOpen}
-      onKeyDown={
-        isDefault
-          ? undefined
-          : (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault()
-                onOpen()
-              }
-            }
-      }
-      className={`group/card relative flex aspect-[1.586/1] w-full min-w-0 flex-col overflow-hidden rounded-xl border bg-white text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-blue-200/80 hover:shadow-[0_16px_40px_-12px_rgba(37,99,235,0.22)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
-        isDefault ? "" : "cursor-pointer"
-      } ${
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onOpen()
+        }
+      }}
+      className={`group/card relative flex aspect-[1.586/1] w-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-xl border bg-white text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-blue-200/80 hover:shadow-[0_16px_40px_-12px_rgba(37,99,235,0.22)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
         highlighted
           ? "border-blue-300 ring-2 ring-blue-100"
           : "border-gray-200/90"
@@ -106,15 +100,25 @@ export function PublishedTemplateCard({
 
         {menuOpen && (
           <div className="absolute right-0 top-full z-50 mt-1 min-w-[148px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-            <button
-              type="button"
-              disabled={isDefault}
-              onClick={() => runMenuAction(onOpen)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
-            >
-              <Pencil className="size-3.5 shrink-0" />
-              Edit
-            </button>
+            {isDefault ? (
+              <button
+                type="button"
+                onClick={() => runMenuAction(onOpen)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <Eye className="size-3.5 shrink-0" />
+                Preview
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => runMenuAction(onOpen)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <Pencil className="size-3.5 shrink-0" />
+                Edit
+              </button>
+            )}
             <button
               type="button"
               onClick={() => runMenuAction(onDuplicate)}
@@ -155,20 +159,33 @@ export function PublishedTemplateCard({
           <h3 className="min-w-0 truncate text-[14px] font-semibold text-gray-900 transition-colors group-hover/card:text-blue-700">
             {record.name}
           </h3>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${status.className}`}
-          >
-            {status.label}
-          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {isDefault && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                Default
+              </span>
+            )}
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${status.className}`}
+            >
+              {status.label}
+            </span>
+          </div>
         </div>
-        <p className="truncate text-[11px] text-gray-500">
-          Created {formatTemplateEditedAt(record.publishedAt)}
-          <span className="mx-2 text-[14px] font-semibold leading-none text-gray-400" aria-hidden>
-            ·
-          </span>
-          {record.quotesSent.toLocaleString()} quote
-          {record.quotesSent === 1 ? "" : "s"} sent
-        </p>
+        {isDefault ? (
+          <p className="truncate text-[11px] text-gray-500">
+            Not editable · Preview only
+          </p>
+        ) : (
+          <p className="truncate text-[11px] text-gray-500">
+            Created {formatTemplateEditedAt(record.publishedAt)}
+            <span className="mx-2 text-[14px] font-semibold leading-none text-gray-400" aria-hidden>
+              ·
+            </span>
+            {record.quotesSent.toLocaleString()} quote
+            {record.quotesSent === 1 ? "" : "s"} sent
+          </p>
+        )}
       </div>
     </article>
   )

@@ -1,3 +1,4 @@
+import { DefaultTemplatePreviewModal } from "@/components/templates/DefaultTemplatePreviewModal"
 import { CreateAdditionalTemplateModal } from "@/components/templates/CreateAdditionalTemplateModal"
 import { CreateQuoteTemplateModal } from "@/components/templates/CreateQuoteTemplateModal"
 import {
@@ -65,6 +66,8 @@ export function QuotePdfTemplatesPage() {
   const [libraryQuery, setLibraryQuery] = useState<TemplateLibraryQuery>(
     DEFAULT_TEMPLATE_LIBRARY_QUERY,
   )
+  const [defaultPreviewRecord, setDefaultPreviewRecord] =
+    useState<PublishedBuilderTemplate | null>(null)
 
   const showLibraryControls = displayTemplates.length > 1
   const filteredTemplates = useMemo(
@@ -103,7 +106,10 @@ export function QuotePdfTemplatesPage() {
 
   const openTemplate = useCallback(
     (record: PublishedBuilderTemplate) => {
-      if (isDefaultPublishedTemplate(record)) return
+      if (isDefaultPublishedTemplate(record)) {
+        setDefaultPreviewRecord(record)
+        return
+      }
       navigateToPromptBuilder(
         navigate,
         { template: record.template, name: record.name },
@@ -112,6 +118,27 @@ export function QuotePdfTemplatesPage() {
     },
     [navigate],
   )
+
+  const closeDefaultPreview = useCallback(() => {
+    setDefaultPreviewRecord(null)
+  }, [])
+
+  const duplicateFromDefaultPreview = useCallback(() => {
+    if (!defaultPreviewRecord) return
+    const duplicate = duplicateRecord(defaultPreviewRecord)
+    if (!duplicate) return
+    closeDefaultPreview()
+    navigateToPromptBuilder(
+      navigate,
+      { template: duplicate.template, name: duplicate.name },
+      duplicate.id,
+    )
+  }, [
+    closeDefaultPreview,
+    defaultPreviewRecord,
+    duplicateRecord,
+    navigate,
+  ])
 
   const handleDuplicate = useCallback(
     (record: PublishedBuilderTemplate) => {
@@ -261,6 +288,12 @@ export function QuotePdfTemplatesPage() {
         open={processingOpen}
         files={pendingFiles}
         onComplete={handleGenerationComplete}
+      />
+
+      <DefaultTemplatePreviewModal
+        record={defaultPreviewRecord}
+        onClose={closeDefaultPreview}
+        onDuplicate={duplicateFromDefaultPreview}
       />
 
       <TemplatesPageDemoSwitcher value={demoView} onChange={setDemoView} />
