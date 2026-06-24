@@ -99,12 +99,24 @@ function upsertBuilderTemplateRecord(
   }
 }
 
+function duplicateTemplateDisplayName(
+  source: Pick<PublishedBuilderTemplate, "name"> & {
+    template: Pick<BuilderTemplate, "name">
+  },
+): string {
+  const original =
+    source.template.name.trim() ||
+    source.name.trim() ||
+    "Untitled template"
+  return `Copy of ${original}`
+}
+
 function duplicatePublishedRecordFromSource(
   source: PublishedBuilderTemplate,
 ): PublishedBuilderTemplate {
   const snapshot = cloneTemplate(source.template)
   snapshot.id = createId("tpl")
-  snapshot.name = `Copy of ${source.name}`
+  snapshot.name = duplicateTemplateDisplayName(source)
 
   const stats = deriveTemplateStats(snapshot)
   const now = new Date().toISOString()

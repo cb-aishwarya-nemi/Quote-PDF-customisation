@@ -1,3 +1,5 @@
+import { AddComponentMenu } from "@/components/prompt-builder/AddComponentMenu"
+import { blockShowsAddComponent } from "@/lib/fragment-blocks"
 import { BlockBackgroundControls } from "@/components/prompt-builder/BlockBackgroundControls"
 import { BlockBackgroundShell } from "@/components/prompt-builder/BlockBackgroundShell"
 import { BlockWidthControl } from "@/components/prompt-builder/BlockWidthControl"
@@ -5,6 +7,8 @@ import { ConditionBuilderPanel } from "@/components/prompt-builder/ConditionBuil
 import { VariantPicker } from "@/components/prompt-builder/VariantPicker"
 import { useBlockLayoutHints } from "@/hooks/use-block-layout-hints"
 import { useCanEditBlockStructure, useIsSalesMode, useIsTemplateEditMode } from "@/hooks/use-builder-editor-mode"
+import { useInlineFragmentActions } from "@/hooks/use-inline-fragment-actions"
+import { blockSupportsFragments } from "@/lib/fragment-blocks"
 import { isBlockLocked } from "@/lib/block-lock"
 import {
   describeConditionRulesShort,
@@ -48,6 +52,8 @@ export function BlockChrome({
   const menuRef = useRef<HTMLDivElement>(null)
 
   const isSelected = selectedBlockId === block.id
+  const fragmentActions = useInlineFragmentActions(block)
+  const showAddComponent = blockShowsAddComponent(block.type, isSelected, isTemplateEdit)
   const variantId = String(block.content.variant ?? "classic")
   const variantLabel = getVariantLabel(block.type, variantId)
   const hasVariants = BLOCK_VARIANTS[block.type].length > 1
@@ -112,6 +118,19 @@ export function BlockChrome({
             </div>
           )}
           {blockContent}
+
+          {showAddComponent && blockSupportsFragments(block.type) && (
+            <div
+              className="border-t border-gray-100 px-5 py-2.5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <AddComponentMenu
+                variablePickerOptions={fragmentActions.variablePickerOptions}
+                onAddText={fragmentActions.addText}
+                onAddVariable={fragmentActions.addVariable}
+              />
+            </div>
+          )}
         </div>
       </div>
     )
@@ -344,6 +363,21 @@ export function BlockChrome({
         )}
 
         {blockContent}
+
+        {showAddComponent && blockSupportsFragments(block.type) && (
+          <div
+            className={`border-t border-gray-100 px-5 py-2.5 ${
+              hasBg ? "rounded-b-xl bg-white/80" : ""
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <AddComponentMenu
+              variablePickerOptions={fragmentActions.variablePickerOptions}
+              onAddText={fragmentActions.addText}
+              onAddVariable={fragmentActions.addVariable}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

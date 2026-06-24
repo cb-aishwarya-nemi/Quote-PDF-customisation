@@ -20,8 +20,7 @@ import { createPortal } from "react-dom"
 const PLACEHOLDER_MESSAGE =
   "Set the conditions that determine when this quote pdf will be used"
 
-/** Fixed toolbar width — text truncates when conditions grow. */
-const STRIP_WIDTH_CLASS = "w-[26rem] max-w-full"
+const STRIP_WIDTH_CLASS = "w-full"
 
 function describeStripMessage(
   displayCondition: BlockDisplayCondition,
@@ -124,7 +123,7 @@ export function TemplateConditionStrip({
     <>
       <div
         ref={stripRef}
-        className={`${STRIP_WIDTH_CLASS} shrink-0 overflow-hidden rounded-lg border border-amber-200/90 bg-amber-50 ${
+        className={`${STRIP_WIDTH_CLASS} overflow-hidden rounded-lg border border-amber-200/90 bg-amber-50 ${
           variant === "floating" ? "shadow-sm" : ""
         }`}
         onClick={(event) => event.stopPropagation()}

@@ -57,6 +57,11 @@ export type ConditionalSegment = {
   text: string
 }
 
+/** Inline text or merge-field chip inside a block — order stored in `inlineFragments`. */
+export type InlineFragment =
+  | { id: string; kind: "text"; text: string }
+  | { id: string; kind: "variable"; field: string; variableKey?: string }
+
 import type { ImageBlockContent } from "@/types/image-block"
 
 export type IntroPageContent = ImageBlockContent

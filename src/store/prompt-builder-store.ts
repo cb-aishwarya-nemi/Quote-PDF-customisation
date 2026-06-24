@@ -1,6 +1,10 @@
 import { createId } from "@/lib/create-id"
 import { flushBuilderAutosave } from "@/lib/builder-autosave"
 import {
+  INLINE_FRAGMENTS_KEY,
+  resolveInlineFragments,
+} from "@/lib/content-fragments"
+import {
   normalizeTemplatePages,
   normalizeTemplatePageOrder,
   QUOTE_PAGE_ID,
@@ -312,6 +316,11 @@ type PromptBuilderStore = {
   setActiveScenario: (scenario: PreviewScenario) => void
   updateBlockContent: (blockId: string, content: Record<string, unknown>) => void
   updateBlockField: (blockId: string, field: string, value: unknown) => void
+  reorderInlineFragments: (
+    blockId: string,
+    activeFragmentId: string,
+    overFragmentId: string,
+  ) => void
   addBlock: (type: BuilderBlockType, afterId?: string, pageId?: string) => void
   addBlockBeside: (blockId: string, type: BuilderBlockType, pageId?: string) => void
   addImageBlockFromFile: (file: File, afterId?: string) => void
@@ -1141,6 +1150,46 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       const patchBlock = (b: BuilderBlock) =>
         b.id === blockId
           ? { ...b, content: { ...b.content, [field]: value } }
+          : b
+
+      const quoteIndex = s.template.blocks.findIndex((b) => b.id === blockId)
+      if (quoteIndex >= 0) {
+        return {
+          template: {
+            ...s.template,
+            blocks: s.template.blocks.map(patchBlock),
+          },
+        }
+      }
+
+      const customPages = resolveCustomPages(s.template).map((page) => {
+        if (!page.blocks?.some((b) => b.id === blockId)) return page
+        return { ...page, blocks: page.blocks.map(patchBlock) }
+      })
+
+      return {
+        template: { ...s.template, customPages, introPage: undefined },
+      }
+    }),
+
+  reorderInlineFragments: (blockId, activeFragmentId, overFragmentId) =>
+    set((s) => {
+      if (!s.template) return s
+      const block = findTemplateBlock(s.template, blockId)
+      if (!block) return s
+
+      const fragments = resolveInlineFragments(block)
+      const fromIndex = fragments.findIndex((f) => f.id === activeFragmentId)
+      const toIndex = fragments.findIndex((f) => f.id === overFragmentId)
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return s
+
+      const nextFragments = arrayMove(fragments, fromIndex, toIndex)
+      const patchBlock = (b: BuilderBlock) =>
+        b.id === blockId
+          ? {
+              ...b,
+              content: { ...b.content, [INLINE_FRAGMENTS_KEY]: nextFragments },
+            }
           : b
 
       const quoteIndex = s.template.blocks.findIndex((b) => b.id === blockId)

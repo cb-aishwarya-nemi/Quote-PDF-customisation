@@ -28,6 +28,8 @@ import {
   type BlockLayoutRow,
 } from "@/lib/block-layout"
 import { hasBlockBackground } from "@/lib/block-background"
+import { canvasCollisionDetection } from "@/lib/canvas-collision-detection"
+import { INLINE_FRAGMENT_DRAG_SOURCE } from "@/lib/content-fragments"
 import { BlockPageEmptyState } from "@/components/prompt-builder/BlockPageEmptyState"
 import {
   getAddableBlockTypesForPage,
@@ -202,6 +204,7 @@ export function PageBlockCanvas({
   const editorMode = usePromptBuilderStore((s) => s.editorMode)
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
   const reorderBlocks = usePromptBuilderStore((s) => s.reorderBlocks)
+  const reorderInlineFragments = usePromptBuilderStore((s) => s.reorderInlineFragments)
   const moveBlockDrop = usePromptBuilderStore((s) => s.moveBlockDrop)
   const selectedBlockId = usePromptBuilderStore((s) => s.selectedBlockId)
   const isSalesPreview = useIsSalesPreview()
@@ -282,13 +285,26 @@ export function PageBlockCanvas({
   )
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (event.active.data.current?.source === INLINE_FRAGMENT_DRAG_SOURCE) return
     const block = event.active.data.current?.block as BuilderBlock | undefined
     setActiveDragBlock(block ?? null)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDragBlock(null)
     const { active, over } = event
+
+    if (active.data.current?.source === INLINE_FRAGMENT_DRAG_SOURCE) {
+      setActiveDragBlock(null)
+      if (!over || active.id === over.id) return
+      if (over.data.current?.source !== INLINE_FRAGMENT_DRAG_SOURCE) return
+      const blockId = active.data.current?.blockId as string | undefined
+      const overBlockId = over.data.current?.blockId as string | undefined
+      if (!blockId || blockId !== overBlockId) return
+      reorderInlineFragments(blockId, String(active.id), String(over.id))
+      return
+    }
+
+    setActiveDragBlock(null)
     if (!over || active.id === over.id) return
 
     const draggedId = String(active.id)
@@ -560,6 +576,7 @@ export function PageBlockCanvas({
   return wrapPage(
     <DndContext
       sensors={sensors}
+      collisionDetection={canvasCollisionDetection}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >

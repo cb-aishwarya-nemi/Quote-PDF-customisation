@@ -65,12 +65,7 @@ export function BuilderBlockView({ block }: Props) {
       )
 
     case "contract_details":
-      return (
-        <ContractDetailsView
-          block={block}
-          onField={onField}
-        />
-      )
+      return <ContractDetailsView block={block} onField={onField} />
 
     case "pricing":
       return <PricingTableView block={block} onField={onField} />

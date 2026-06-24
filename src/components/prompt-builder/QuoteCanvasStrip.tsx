@@ -75,28 +75,31 @@ export function CanvasToolbarRow({
   const isFloating = variant === "floating"
 
   return (
-    <div
-      className={`flex w-full items-center gap-x-3 ${
-        isFloating ? "flex-nowrap justify-between" : "flex-wrap gap-y-2"
-      } ${className ?? ""}`}
-    >
-      <div className="flex min-w-0 shrink-0 items-center gap-3">
-        <TemplateConditionStrip variant={variant} />
-        {isPreview && (
-          <>
-            <PreviewScenarioPicker variant={variant} className="min-w-0 shrink-0" />
-            <PreviewPersonaPicker />
-          </>
+    <div className={`flex w-full flex-col gap-2 ${className ?? ""}`}>
+      <div
+        className={`flex w-full items-center gap-x-3 ${
+          isFloating ? "flex-nowrap justify-between" : "flex-wrap gap-y-2"
+        }`}
+      >
+        <div className="flex min-w-0 shrink-0 items-center gap-3">
+          {isPreview && (
+            <>
+              <PreviewScenarioPicker variant={variant} className="min-w-0 shrink-0" />
+              <PreviewPersonaPicker />
+            </>
+          )}
+        </div>
+        {!isFloating && !suppressActions && <div className="min-w-0 flex-1" />}
+        {!suppressActions && (
+          <CanvasDocumentActions
+            documentRef={documentRef}
+            variant={variant}
+            className="shrink-0"
+          />
         )}
       </div>
-      {!isFloating && !suppressActions && <div className="min-w-0 flex-1" />}
-      {!suppressActions && (
-        <CanvasDocumentActions
-          documentRef={documentRef}
-          variant={variant}
-          className="shrink-0"
-        />
-      )}
+
+      <TemplateConditionStrip variant={variant} />
     </div>
   )
 }

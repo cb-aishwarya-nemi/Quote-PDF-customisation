@@ -117,9 +117,13 @@ export function QuotePdfTemplatesPage() {
     (record: PublishedBuilderTemplate) => {
       const duplicate = duplicateRecord(record)
       if (!duplicate) return
-      setHighlightTemplateId(duplicate.id)
+      navigateToPromptBuilder(
+        navigate,
+        { template: duplicate.template, name: duplicate.name },
+        duplicate.id,
+      )
     },
-    [duplicateRecord],
+    [duplicateRecord, navigate],
   )
 
   const handleDelete = useCallback(

@@ -123,6 +123,93 @@ const BLOCK_FIELD_DEFS: Partial<Record<BuilderBlockType, FieldDef[]>> = {
   ],
 }
 
+const VARIABLE_DUMMY_VALUES: Record<string, string> = {
+  "company.name": "Acme Software Inc.",
+  "company.address": "548 Market St, Suite 400\nSan Francisco, CA 94104",
+  "company.tax_id": "Tax ID 94-1234567",
+  "company.entity": "Acme Software Inc. (Delaware)",
+  "quote.number": "QT-2026-0142",
+  "quote.issued_date": "Jun 12, 2026",
+  "quote.valid_until": "Jul 12, 2026",
+  "customer.name": "Acme Corp",
+  "quote.tcv_amount": "$127,200",
+  "quote.tcv_term": "over 24 months",
+  "quote.one_time_fees": "$8,500",
+  "quote.recurring_amount": "$4,950 / mo",
+  "contract.term_months": "24",
+  "customer.billing_name": "Acme Corp",
+  "customer.contact_name": "Jane Cooper",
+  "customer.email": "jane.cooper@acme.com",
+  "customer.billing_address": "100 Market Street, San Francisco, CA 94105",
+  "contract.term": "36 months",
+  "contract.start_date": "Jul 1, 2026",
+  "contract.billing_cycle": "Annual",
+  "contract.payment_terms": "Net-30",
+  "quote.salesperson": "Jordan Lee",
+  "quote.subtotal": "$68,500",
+  "quote.entitlements_label": "Entitlements & usage",
+  "ae.name": "Jordan Lee",
+  "ae.title": "Account Executive",
+  "ae.email": "jordan.lee@chargebee.com",
+  "ae.phone": "+1 (415) 555-0142",
+}
+
+const DEFAULT_LINE_ITEM_NAMES = [
+  "Enterprise Platform — Annual",
+  "Premium Support",
+  "Implementation services",
+]
+const DEFAULT_LINE_ITEM_AMOUNTS = ["$48,000", "$12,000", "$8,500"]
+const DEFAULT_ENTITLEMENT_NAMES = ["Platform seats", "API calls", "Premium support"]
+const DEFAULT_ENTITLEMENT_LIMITS = ["250 users", "5M / month", "24×5"]
+const DEFAULT_ENTITLEMENT_NOTES = [
+  "Named seats; overage billed monthly at list rate.",
+  "Metered usage with 10% burst allowance.",
+  "Dedicated CSM and quarterly business reviews.",
+]
+
+/** Placeholder shown when a merge field is first inserted — not the variable label. */
+export function getVariableDummyValue(variableKey: string): string {
+  const known = VARIABLE_DUMMY_VALUES[variableKey]
+  if (known) return known
+
+  const lineName = variableKey.match(/^quote\.line_items\[(\d+)\]\.name$/)
+  if (lineName) {
+    const i = Number(lineName[1])
+    return DEFAULT_LINE_ITEM_NAMES[i] ?? `Line item ${i + 1}`
+  }
+
+  const lineAmount = variableKey.match(/^quote\.line_items\[(\d+)\]\.amount$/)
+  if (lineAmount) {
+    const i = Number(lineAmount[1])
+    return DEFAULT_LINE_ITEM_AMOUNTS[i] ?? "$0.00"
+  }
+
+  const entName = variableKey.match(/^quote\.entitlements\[(\d+)\]\.name$/)
+  if (entName) {
+    const i = Number(entName[1])
+    return DEFAULT_ENTITLEMENT_NAMES[i] ?? `Entitlement ${i + 1}`
+  }
+
+  const entLimit = variableKey.match(/^quote\.entitlements\[(\d+)\]\.limit$/)
+  if (entLimit) {
+    const i = Number(entLimit[1])
+    return DEFAULT_ENTITLEMENT_LIMITS[i] ?? "—"
+  }
+
+  const entNotes = variableKey.match(/^quote\.entitlements\[(\d+)\]\.notes$/)
+  if (entNotes) {
+    const i = Number(entNotes[1])
+    return DEFAULT_ENTITLEMENT_NOTES[i] ?? ""
+  }
+
+  if (variableKey.startsWith("custom.")) {
+    return "Sample text"
+  }
+
+  return "Sample value"
+}
+
 function formatSample(value: unknown): string {
   if (value == null) return ""
   if (typeof value === "string") return value.trim()
@@ -151,6 +238,10 @@ export function getVariableDef(
   field: string,
 ): FieldDef | undefined {
   return BLOCK_FIELD_DEFS[blockType]?.find((d) => d.field === field)
+}
+
+export function getBlockFieldDefs(blockType: BuilderBlockType): FieldDef[] {
+  return BLOCK_FIELD_DEFS[blockType] ?? []
 }
 
 export function getPricingRowVariableDef(
