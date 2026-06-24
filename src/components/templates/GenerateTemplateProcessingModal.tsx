@@ -1,16 +1,26 @@
 import { ProcessingSteps } from "@/components/templates/ProcessingSteps"
+import { createBuilderTemplate } from "@/lib/create-builder-template"
+import { createId } from "@/lib/create-id"
 import {
-  buildGenerationStepLabels,
-  getGenerationBusinessType,
-} from "@/lib/template-generation-steps"
+  extractTemplateFromFiles,
+  type PdfExtractionSummary,
+} from "@/lib/pdf-template-extractor"
+import { getGenerationBusinessType } from "@/lib/template-generation-steps"
+import type { BuilderTemplate } from "@/types/prompt-builder"
 import type { ProcessingStep } from "@/mock/data"
 import { Sparkles } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+
+export type TemplateGenerationResult = {
+  template: BuilderTemplate
+  extractionSummary: PdfExtractionSummary | null
+  stepLabels: string[]
+}
 
 type Props = {
   open: boolean
-  hasUploads: boolean
-  onComplete: () => void
+  files: File[]
+  onComplete: (result: TemplateGenerationResult) => void
 }
 
 function initialSteps(labels: string[]): ProcessingStep[] {
@@ -20,21 +30,64 @@ function initialSteps(labels: string[]): ProcessingStep[] {
   }))
 }
 
+function buildStepLabels(hasPdf: boolean, businessType: string): string[] {
+  if (!hasPdf) {
+    return [
+      "Analysing your business context",
+      `Selecting layout for ${businessType}`,
+      "Applying sensible defaults in your brand style",
+      "Drafting template",
+    ]
+  }
+
+  return [
+    "Reading uploaded PDF",
+    "Extracting text and section markers",
+    "Mapping sections to template blocks",
+    "Applying layout rules",
+    "Drafting template",
+  ]
+}
+
+function stepsForProgress(labels: string[], completedCount: number): ProcessingStep[] {
+  const activeIndex = Math.min(completedCount, labels.length - 1)
+  return labels.map((label, index) => ({
+    label,
+    status:
+      index < completedCount
+        ? "done"
+        : index === activeIndex
+          ? "active"
+          : "idle",
+  }))
+}
+
 export function GenerateTemplateProcessingModal({
   open,
-  hasUploads,
+  files,
   onComplete,
 }: Props) {
   const businessType = getGenerationBusinessType()
+  const hasPdf = useMemo(
+    () =>
+      files.some(
+        (file) =>
+          file.type === "application/pdf" ||
+          file.name.toLowerCase().endsWith(".pdf"),
+      ),
+    [files],
+  )
 
   const stepLabels = useMemo(
-    () => buildGenerationStepLabels(hasUploads, businessType),
-    [hasUploads, businessType],
+    () => buildStepLabels(hasPdf, businessType),
+    [hasPdf, businessType],
   )
 
   const [steps, setSteps] = useState<ProcessingStep[]>(() =>
     initialSteps(stepLabels),
   )
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
 
   useEffect(() => {
     if (!open) {
@@ -44,36 +97,54 @@ export function GenerateTemplateProcessingModal({
 
     setSteps(initialSteps(stepLabels))
 
-    let activeIndex = 0
-    const interval = setInterval(() => {
-      activeIndex += 1
-      if (activeIndex >= stepLabels.length) {
-        clearInterval(interval)
+    let cancelled = false
+    let completedCount = 0
+
+    const markProgress = () => {
+      completedCount = Math.min(completedCount + 1, stepLabels.length)
+      setSteps(stepsForProgress(stepLabels, completedCount))
+    }
+
+    void (async () => {
+      const templateId = createId("tpl")
+
+      try {
+        const result = await extractTemplateFromFiles(templateId, files, () => {
+          if (!cancelled) markProgress()
+        })
+
+        if (cancelled) return
+
+        while (completedCount < stepLabels.length) {
+          markProgress()
+        }
+
         setSteps(
-          stepLabels.map((label) => ({
-            label,
-            status: "done" as const,
-          })),
+          stepLabels.map((label) => ({ label, status: "done" as const })),
         )
-        setTimeout(onComplete, 700)
-        return
+
+        window.setTimeout(() => {
+          if (cancelled) return
+          onCompleteRef.current({
+            template: result.template,
+            extractionSummary: result.summary,
+            stepLabels,
+          })
+        }, 700)
+      } catch {
+        if (cancelled) return
+        onCompleteRef.current({
+          template: createBuilderTemplate(templateId),
+          extractionSummary: null,
+          stepLabels,
+        })
       }
+    })()
 
-      setSteps(
-        stepLabels.map((label, index) => ({
-          label,
-          status:
-            index < activeIndex
-              ? "done"
-              : index === activeIndex
-                ? "active"
-                : "idle",
-        })),
-      )
-    }, 900)
-
-    return () => clearInterval(interval)
-  }, [open, stepLabels, onComplete])
+    return () => {
+      cancelled = true
+    }
+  }, [open, files, stepLabels])
 
   if (!open) return null
 
@@ -89,7 +160,7 @@ export function GenerateTemplateProcessingModal({
           </span>
 
           <h2 className="mt-3 text-[20px] font-semibold leading-snug text-gray-900">
-            Generating your quote template
+            {hasPdf ? "Extracting your quote layout" : "Generating your quote template"}
           </h2>
 
           <div className="mt-6">
@@ -97,7 +168,9 @@ export function GenerateTemplateProcessingModal({
           </div>
 
           <p className="mt-6 text-[13px] text-gray-500">
-            Taking you to your template in a few seconds.
+            {hasPdf
+              ? "Reading your PDF and mapping sections to editable blocks."
+              : "Taking you to your template in a few seconds."}
           </p>
         </div>
       </div>

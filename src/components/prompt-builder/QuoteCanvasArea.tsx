@@ -1,48 +1,23 @@
 import {
-  AddBesideBlockDivider,
-  AddBlockDivider,
-} from "@/components/prompt-builder/AddBlockDivider"
-import { BuilderBlockView } from "@/components/prompt-builder/BuilderBlockView"
-import { BlockChrome } from "@/components/prompt-builder/BlockChrome"
-import { CanvasLayoutBanner } from "@/components/prompt-builder/CanvasLayoutBanner"
-import {
-  BuilderDragOverlayLabel,
-  BuilderBlockRow,
-  SortableBuilderBlock,
-} from "@/components/prompt-builder/SortableBuilderBlock"
-import {
   CanvasDocumentActions,
   CanvasInlineToolbar,
   CanvasToolbarRow,
 } from "@/components/prompt-builder/QuoteCanvasStrip"
+import { CustomPageEditor } from "@/components/prompt-builder/IntroPageEditor"
+import { IntroPageSection } from "@/components/prompt-builder/IntroPageSection"
+import { PageBlockCanvas } from "@/components/prompt-builder/PageBlockCanvas"
 import { TemplateDocumentFrame } from "@/components/prompt-builder/TemplateDocumentFrame"
-import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import { CANVAS_DOCUMENT_MAX_WIDTH } from "@/lib/canvas-constants"
+import { getBlocksForPage, getCustomPageKind } from "@/lib/page-blocks"
 import {
-  canAddBesideBlock,
-  getLayoutColumn,
-  groupBlocksForLayout,
-  type BlockLayoutRow,
-} from "@/lib/block-layout"
-import { signatureBlockNeedsPageBreak } from "@/lib/template-validation"
+  deriveTemplatePages,
+  findCustomPage,
+  QUOTE_PAGE_ID,
+  resolveCustomPages,
+} from "@/lib/template-pages"
+import { groupBlocksForLayout } from "@/lib/block-layout"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
-import { blockIsVisible, templateAppliesToScenario } from "@/types/prompt-builder"
-import type { BuilderBlock } from "@/types/prompt-builder"
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core"
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable"
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { describeConditionRules, hasConditions } from "@/lib/segment-conditions"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 function useFloatingActionsOnScrollUp(
   scrollRef: React.RefObject<HTMLDivElement | null>,
@@ -91,104 +66,7 @@ function useFloatingActionsOnScrollUp(
   return showFloating
 }
 
-const INSERT_AT_START = "__start__"
-
-function blockIdsForRow(row: BlockLayoutRow): string[] {
-  if (row.type === "pair") return [row.left.id, row.right.id]
-  return [row.block.id]
-}
-
-function lastBlockIdForRow(row: BlockLayoutRow): string {
-  if (row.type === "pair") return row.right.id
-  return row.block.id
-}
-
-function renderPreviewRow(
-  row: ReturnType<typeof groupBlocksForLayout>[number],
-  activeScenario: Parameters<typeof blockIsVisible>[1],
-  key: string,
-  interactive: boolean,
-) {
-  if (row.type === "pair") {
-    const leftVisible = blockIsVisible(
-      (row.left.content.displayCondition ?? null) as Parameters<
-        typeof blockIsVisible
-      >[0],
-      activeScenario,
-    )
-    const rightVisible = blockIsVisible(
-      (row.right.content.displayCondition ?? null) as Parameters<
-        typeof blockIsVisible
-      >[0],
-      activeScenario,
-    )
-
-    if (!leftVisible && !rightVisible) return null
-
-    if (leftVisible && rightVisible) {
-      return (
-        <BuilderBlockRow key={key}>
-          <PreviewBlockCell block={row.left} interactive={interactive} />
-          <PreviewBlockCell block={row.right} interactive={interactive} />
-        </BuilderBlockRow>
-      )
-    }
-
-    const block = leftVisible ? row.left : row.right
-    return <PreviewBlockCell key={key} block={block} interactive={interactive} />
-  }
-
-  const visible = blockIsVisible(
-    (row.block.content.displayCondition ?? null) as Parameters<
-      typeof blockIsVisible
-    >[0],
-    activeScenario,
-  )
-  if (!visible) return null
-
-  if (getLayoutColumn(row.block.content) === "left") {
-    return (
-      <div key={key} className="grid grid-cols-2 items-start gap-4">
-        <PreviewBlockCell block={row.block} interactive={interactive} />
-      </div>
-    )
-  }
-
-  if (getLayoutColumn(row.block.content) === "right") {
-    return (
-      <div key={key} className="grid grid-cols-2 items-start gap-4">
-        <div />
-        <PreviewBlockCell block={row.block} interactive={interactive} />
-      </div>
-    )
-  }
-
-  return <PreviewBlockCell key={key} block={row.block} interactive={interactive} />
-}
-
-function PreviewBlockCell({
-  block,
-  className,
-  interactive = false,
-}: {
-  block: BuilderBlock
-  className?: string
-  interactive?: boolean
-}) {
-  return (
-    <div
-      className={`${signatureBlockNeedsPageBreak(block) ? "break-before-page pt-8" : ""} ${className ?? ""}`}
-    >
-      {interactive ? (
-        <BlockChrome block={block}>
-          <BuilderBlockView block={block} />
-        </BlockChrome>
-      ) : (
-        <BuilderBlockView block={block} />
-      )}
-    </div>
-  )
-}
+const INTRO_HOVER_CLEAR_MS = 300
 
 export function QuoteCanvasArea() {
   const documentRef = useRef<HTMLDivElement>(null)
@@ -200,177 +78,135 @@ export function QuoteCanvasArea() {
   )
 
   const template = usePromptBuilderStore((s) => s.template)
+  const activePageId = usePromptBuilderStore((s) => s.activePageId)
+  const setActivePageId = usePromptBuilderStore((s) => s.setActivePageId)
   const editorMode = usePromptBuilderStore((s) => s.editorMode)
-  const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
-  const reorderBlocks = usePromptBuilderStore((s) => s.reorderBlocks)
   const selectedBlockId = usePromptBuilderStore((s) => s.selectedBlockId)
   const clearSelection = usePromptBuilderStore((s) => s.setSelectedBlockId)
   const isPreview = editorMode === "preview"
-  const isSalesPreview = useIsSalesPreview()
   const isSales = editorMode === "sales"
 
-  const [activeDragBlock, setActiveDragBlock] = useState<BuilderBlock | null>(
-    null,
-  )
-  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null)
-  const [hoveredInsertKey, setHoveredInsertKey] = useState<string | null>(null)
+  const [introAddZoneHover, setIntroAddZoneHover] = useState(false)
+  const hoverClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pageSectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const scrollSyncLockRef = useRef(false)
 
-  const isInsertRevealed = useCallback(
-    (insertKey: string, neighborBlockIds: string[]) => {
-      if (hoveredInsertKey === insertKey) return true
-      if (selectedBlockId && neighborBlockIds.includes(selectedBlockId)) {
-        return true
-      }
-      if (hoveredBlockId && neighborBlockIds.includes(hoveredBlockId)) {
-        return true
-      }
-      return false
-    },
-    [hoveredInsertKey, selectedBlockId, hoveredBlockId],
-  )
-
-  const blockHoverHandlers = useCallback(
-    (blockId: string) => ({
-      onPointerEnter: () => setHoveredBlockId(blockId),
-      onPointerLeave: () => setHoveredBlockId(null),
-    }),
-    [],
-  )
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  )
-
-  const blocks = template?.blocks ?? []
-  const layoutRows = useMemo(() => groupBlocksForLayout(blocks), [blocks])
-  const blockIds = useMemo(() => blocks.map((block) => block.id), [blocks])
-
-  const visiblePreviewRows = useMemo(() => {
-    if (!template) return []
-    if (!templateAppliesToScenario(template, activeScenario)) return []
-    return layoutRows
-      .map((row, index) =>
-        renderPreviewRow(
-          row,
-          activeScenario,
-          `preview-row-${index}`,
-          isSalesPreview,
-        ),
-      )
-      .filter(Boolean)
-  }, [layoutRows, activeScenario, template, isSalesPreview])
-
-  const templateAppliesInPreview = templateAppliesToScenario(
-    template,
-    activeScenario,
-  )
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const block = event.active.data.current?.block as BuilderBlock | undefined
-    setActiveDragBlock(block ?? null)
-  }
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDragBlock(null)
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const fromIndex = blocks.findIndex((block) => block.id === active.id)
-    const toIndex = blocks.findIndex((block) => block.id === over.id)
-    if (fromIndex >= 0 && toIndex >= 0) {
-      reorderBlocks(fromIndex, toIndex)
+  const cancelHoverClear = useCallback(() => {
+    if (hoverClearTimerRef.current) {
+      clearTimeout(hoverClearTimerRef.current)
+      hoverClearTimerRef.current = null
     }
-  }
+  }, [])
+
+  const scheduleHoverClear = useCallback((clearFn: () => void) => {
+    cancelHoverClear()
+    hoverClearTimerRef.current = setTimeout(() => {
+      clearFn()
+      hoverClearTimerRef.current = null
+    }, INTRO_HOVER_CLEAR_MS)
+  }, [cancelHoverClear])
+
+  useEffect(() => () => cancelHoverClear(), [cancelHoverClear])
+
+  const setIntroZoneHover = useCallback(
+    (active: boolean) => {
+      if (active) {
+        cancelHoverClear()
+        setIntroAddZoneHover(true)
+      } else {
+        scheduleHoverClear(() => setIntroAddZoneHover(false))
+      }
+    },
+    [cancelHoverClear, scheduleHoverClear],
+  )
+
+  const pages = useMemo(
+    () => (template ? deriveTemplatePages(template) : []),
+    [template],
+  )
+
+  useEffect(() => {
+    const section = pageSectionRefs.current[activePageId]
+    const scrollEl = scrollRef.current
+    if (!section || !scrollEl) return
+
+    const scrollRect = scrollEl.getBoundingClientRect()
+    const sectionRect = section.getBoundingClientRect()
+    const alreadyVisible =
+      sectionRect.top >= scrollRect.top - 24 &&
+      sectionRect.top <= scrollRect.top + scrollRect.height * 0.4
+
+    if (alreadyVisible) return
+
+    scrollSyncLockRef.current = true
+    section.scrollIntoView({ behavior: "smooth", block: "start" })
+    const timer = setTimeout(() => {
+      scrollSyncLockRef.current = false
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [activePageId])
+
+  useEffect(() => {
+    const scrollEl = scrollRef.current
+    if (!scrollEl || pages.length <= 1) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (scrollSyncLockRef.current) return
+
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)
+
+        const topEntry = visible[0]
+        if (!topEntry) return
+
+        const pageId = topEntry.target.getAttribute("data-page-id")
+        if (pageId && pageId !== activePageId) {
+          setActivePageId(pageId)
+        }
+      },
+      {
+        root: scrollEl,
+        threshold: [0.15, 0.35, 0.55, 0.75],
+      },
+    )
+
+    for (const page of pages) {
+      const section = pageSectionRefs.current[page.id]
+      if (section) observer.observe(section)
+    }
+
+    return () => observer.disconnect()
+  }, [pages, activePageId, setActivePageId])
 
   if (!template) return null
 
-  const editCanvas = (
-    <>
-      <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
-        {!isSales && layoutRows.length > 0 && (
-          <AddBlockDivider
-            atStart
-            visible={isInsertRevealed(
-              INSERT_AT_START,
-              blockIdsForRow(layoutRows[0]),
-            )}
-            onInsertHover={(active) =>
-              setHoveredInsertKey(active ? INSERT_AT_START : null)
-            }
-          />
-        )}
-        {layoutRows.map((row, rowIndex) => {
-        const currentBlockIds = blockIdsForRow(row)
-        const nextRow =
-          rowIndex < layoutRows.length - 1 ? layoutRows[rowIndex + 1] : null
-        const nextBlockIds = nextRow ? blockIdsForRow(nextRow) : []
-        const insertAfterId = lastBlockIdForRow(row)
-        const insertNeighbors = [...currentBlockIds, ...nextBlockIds]
+  const customPages = resolveCustomPages(template)
+  const hasCustomPages = customPages.length > 0
+  const quoteBlocks = getBlocksForPage(template, QUOTE_PAGE_ID)
+  const quoteLayoutRows = groupBlocksForLayout(quoteBlocks)
+  const firstQuoteBlockIds =
+    quoteLayoutRows.length > 0
+      ? quoteLayoutRows[0].type === "pair"
+        ? [quoteLayoutRows[0].left.id, quoteLayoutRows[0].right.id]
+        : [quoteLayoutRows[0].block.id]
+      : []
 
-        if (row.type === "pair") {
-          return (
-            <Fragment key={`${row.left.id}-${row.right.id}`}>
-              <BuilderBlockRow>
-                <SortableBuilderBlock
-                  block={row.left}
-                  {...blockHoverHandlers(row.left.id)}
-                />
-                <SortableBuilderBlock
-                  block={row.right}
-                  {...blockHoverHandlers(row.right.id)}
-                />
-              </BuilderBlockRow>
-              {!isSales && (
-                <AddBlockDivider
-                  afterId={insertAfterId}
-                  visible={isInsertRevealed(insertAfterId, insertNeighbors)}
-                  onInsertHover={(active) =>
-                    setHoveredInsertKey(active ? insertAfterId : null)
-                  }
-                />
-              )}
-            </Fragment>
-          )
-        }
+  const showIntroPageAdd =
+    editorMode === "edit" &&
+    !isSales &&
+    !hasCustomPages &&
+    quoteLayoutRows.length > 0 &&
+    (introAddZoneHover ||
+      (selectedBlockId !== null &&
+        firstQuoteBlockIds.includes(selectedBlockId)))
 
-        const blockIndex = blocks.findIndex((entry) => entry.id === row.block.id)
-        const nextBlock = blocks[blockIndex + 1]
-        const showBesideAdd = !isSales && canAddBesideBlock(row.block, nextBlock)
-        const layoutColumn = getLayoutColumn(row.block.content)
-        const halfColumn = layoutColumn === "left" || layoutColumn === "right"
-
-        return (
-          <Fragment key={row.block.id}>
-            <div
-              className={`group/row relative ${
-                halfColumn ? "grid grid-cols-2 items-start gap-4" : ""
-              }`}
-            >
-              {layoutColumn === "right" && <div aria-hidden />}
-              <SortableBuilderBlock
-                block={row.block}
-                {...blockHoverHandlers(row.block.id)}
-              />
-              {showBesideAdd && (
-                <AddBesideBlockDivider blockId={row.block.id} />
-              )}
-            </div>
-            {!isSales && (
-              <AddBlockDivider
-                afterId={insertAfterId}
-                visible={isInsertRevealed(insertAfterId, insertNeighbors)}
-                onInsertHover={(active) =>
-                  setHoveredInsertKey(active ? insertAfterId : null)
-                }
-              />
-            )}
-          </Fragment>
-        )
-      })}
-      </SortableContext>
-      {editorMode === "edit" && <CanvasLayoutBanner />}
-    </>
-  )
+  const showIntroHoverBridge =
+    editorMode === "edit" &&
+    !isSales &&
+    !hasCustomPages &&
+    quoteLayoutRows.length > 0
 
   return (
     <div
@@ -405,63 +241,89 @@ export function QuoteCanvasArea() {
           <CanvasInlineToolbar
             documentRef={documentRef}
             anchorRef={actionsAnchorRef}
+            suppressActions={showFloatingActions}
           />
 
-          {isPreview ? (
-            <TemplateDocumentFrame exportRef={documentRef}>
-              {!templateAppliesInPreview ? (
-                <div className="py-12 text-center">
-                  <p className="text-[13px] text-gray-700">
-                    This template doesn&apos;t apply to{" "}
-                    <span className="font-medium">{activeScenario.label}</span>.
-                  </p>
-                  {hasConditions(template.displayCondition ?? null) && (
-                    <p className="mt-2 text-[12px] text-gray-500">
-                      {describeConditionRules(template.displayCondition ?? null)}
-                    </p>
-                  )}
-                  <p className="mt-3 text-[12px] text-gray-400">
-                    Switch scenario or adjust template conditions in the header.
-                  </p>
-                </div>
-              ) : visiblePreviewRows.length === 0 ? (
-                <p className="py-12 text-center text-[13px] text-gray-500">
-                  No blocks visible for{" "}
-                  <span className="font-medium text-gray-700">
-                    {activeScenario.label}
-                  </span>
-                  . Switch scenario or ask the agent to adjust display conditions.
-                </p>
-              ) : (
-                visiblePreviewRows.map((row, index) => (
+          <div className="space-y-8">
+            {pages.map((page) => {
+              if (page.kind === "custom") {
+                const customPage = findCustomPage(template, page.id)
+                const pageKind = customPage
+                  ? getCustomPageKind(customPage)
+                  : "intro"
+
+                return (
                   <div
-                    key={`visible-${index}`}
-                    className={index > 0 ? "mt-6 border-t border-gray-100 pt-6" : ""}
+                    key={page.id}
+                    ref={(node) => {
+                      pageSectionRefs.current[page.id] = node
+                    }}
+                    data-page-id={page.id}
                   >
-                    {row}
+                    {pageKind === "blocks" ? (
+                      <PageBlockCanvas
+                        template={template}
+                        pageId={page.id}
+                        pageNumber={page.pageNumber}
+                        isPreview={isPreview}
+                        isSales={isSales}
+                        onFrameClick={
+                          !isPreview ? (e) => e.stopPropagation() : undefined
+                        }
+                      />
+                    ) : (
+                      <TemplateDocumentFrame
+                        pageNumber={page.pageNumber}
+                        onClick={!isPreview ? (e) => e.stopPropagation() : undefined}
+                      >
+                        <CustomPageEditor pageId={page.id} />
+                      </TemplateDocumentFrame>
+                    )}
                   </div>
-                ))
-              )}
-            </TemplateDocumentFrame>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <TemplateDocumentFrame
-                exportRef={documentRef}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {editCanvas}
-              </TemplateDocumentFrame>
-              <DragOverlay>
-                {activeDragBlock ? (
-                  <BuilderDragOverlayLabel block={activeDragBlock} />
-                ) : null}
-              </DragOverlay>
-            </DndContext>
-          )}
+                )
+              }
+
+              return (
+                <div
+                  key={page.id}
+                  ref={(node) => {
+                    pageSectionRefs.current[page.id] = node
+                  }}
+                  data-page-id={page.id}
+                >
+                  {!isPreview && !isSales && !hasCustomPages && (
+                    <>
+                      <IntroPageSection
+                        showAddDivider={showIntroPageAdd}
+                        onInsertHover={setIntroZoneHover}
+                      />
+
+                      {showIntroHoverBridge && (
+                        <div
+                          className="relative z-10 -mt-2 h-10"
+                          onPointerEnter={() => setIntroZoneHover(true)}
+                          onPointerLeave={() => setIntroZoneHover(false)}
+                          aria-hidden
+                        />
+                      )}
+                    </>
+                  )}
+
+                  <PageBlockCanvas
+                    template={template}
+                    pageId={QUOTE_PAGE_ID}
+                    pageNumber={page.pageNumber}
+                    isPreview={isPreview}
+                    isSales={isSales}
+                    exportRef={documentRef}
+                    onFrameClick={
+                      !isPreview ? (e) => e.stopPropagation() : undefined
+                    }
+                  />
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>

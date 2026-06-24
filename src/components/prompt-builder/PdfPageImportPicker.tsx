@@ -1,13 +1,14 @@
 import {
   renderPdfPageThumbnail,
   renderPdfPagesToDataUrls,
+  type PdfSource,
 } from "@/lib/pdf-page-render"
 import { Check, Loader2, X } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 
 type Props = {
   fileName: string
-  pdfDataUrl: string
+  pdfSource: PdfSource
   pageCount: number
   initialSelected?: number[]
   onConfirm: (pages: { page: number; previewUrl: string }[]) => void
@@ -17,12 +18,12 @@ type Props = {
 type ThumbState = {
   loading: boolean
   url?: string
-  error?: boolean
+  error?: string
 }
 
 export function PdfPageImportPicker({
   fileName,
-  pdfDataUrl,
+  pdfSource,
   pageCount,
   initialSelected,
   onConfirm,
@@ -33,6 +34,7 @@ export function PdfPageImportPicker({
   )
   const [thumbs, setThumbs] = useState<Record<number, ThumbState>>({})
   const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
 
   const loadThumb = useCallback(
     async (page: number) => {
@@ -41,24 +43,36 @@ export function PdfPageImportPicker({
         [page]: { loading: true },
       }))
       try {
-        const url = await renderPdfPageThumbnail(pdfDataUrl, page)
+        const url = await renderPdfPageThumbnail(pdfSource, page)
         setThumbs((prev) => ({
           ...prev,
           [page]: { loading: false, url },
         }))
-      } catch {
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Preview failed"
         setThumbs((prev) => ({
           ...prev,
-          [page]: { loading: false, error: true },
+          [page]: { loading: false, error: message },
         }))
       }
     },
-    [pdfDataUrl],
+    [pdfSource],
   )
 
   useEffect(() => {
-    for (let page = 1; page <= pageCount; page += 1) {
-      void loadThumb(page)
+    let cancelled = false
+
+    async function loadAllThumbs() {
+      for (let page = 1; page <= pageCount; page += 1) {
+        if (cancelled) return
+        await loadThumb(page)
+      }
+    }
+
+    void loadAllThumbs()
+    return () => {
+      cancelled = true
     }
   }, [pageCount, loadThumb])
 
@@ -83,9 +97,19 @@ export function PdfPageImportPicker({
     if (!pages.length) return
 
     setImporting(true)
+    setImportError(null)
     try {
-      const imported = await renderPdfPagesToDataUrls(pdfDataUrl, pages)
+      const imported = await renderPdfPagesToDataUrls(pdfSource, pages)
+      if (!imported.length) {
+        throw new Error("No pages were rendered")
+      }
       onConfirm(imported)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not import the selected pages. Try again."
+      setImportError(message)
     } finally {
       setImporting(false)
     }
@@ -95,7 +119,7 @@ export function PdfPageImportPicker({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4"
       onClick={(e) => {
         e.stopPropagation()
         onCancel()
@@ -182,7 +206,7 @@ export function PdfPageImportPicker({
                       />
                     )}
                     {thumb?.error && (
-                      <div className="flex h-full items-center justify-center text-[10px] text-gray-400">
+                      <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-gray-400">
                         Preview failed
                       </div>
                     )}
@@ -202,6 +226,9 @@ export function PdfPageImportPicker({
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-3">
+          {importError && (
+            <p className="mr-auto text-[11px] text-red-600">{importError}</p>
+          )}
           <button
             type="button"
             onClick={onCancel}

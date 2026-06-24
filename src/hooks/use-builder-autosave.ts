@@ -1,11 +1,11 @@
 import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
+import { lastPersistedAtByTemplateId, flushBuilderAutosave } from "@/lib/builder-autosave"
 import { useEffect, useRef, useState } from "react"
 
 const AUTOSAVE_DELAY_MS = 3000
 
-/** Survives StrictMode remounts so the first save isn't lost. */
-const lastPersistedAtByTemplateId = new Map<string, string>()
+export { flushBuilderAutosave }
 
 export function useBuilderAutosave() {
   const templateId = usePromptBuilderStore((s) => s.template?.id ?? null)

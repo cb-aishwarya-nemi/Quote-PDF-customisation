@@ -1,6 +1,9 @@
 import { CreateAdditionalTemplateModal } from "@/components/templates/CreateAdditionalTemplateModal"
 import { CreateQuoteTemplateModal } from "@/components/templates/CreateQuoteTemplateModal"
-import { GenerateTemplateProcessingModal } from "@/components/templates/GenerateTemplateProcessingModal"
+import {
+  GenerateTemplateProcessingModal,
+  type TemplateGenerationResult,
+} from "@/components/templates/GenerateTemplateProcessingModal"
 import { PublishedTemplateCard } from "@/components/templates/PublishedTemplateCard"
 import { TemplateLibraryControls } from "@/components/templates/TemplateLibraryControls"
 import { TemplateLibraryEmptyState } from "@/components/templates/TemplateLibraryEmptyState"
@@ -14,7 +17,7 @@ import {
   type TemplateLibraryQuery,
 } from "@/lib/filter-published-templates"
 import { navigateToPromptBuilder } from "@/lib/navigate-to-builder"
-import { resolveTemplatesPageLibrary } from "@/lib/seed-demo-library"
+import { isDefaultPublishedTemplate, resolveTemplatesPageLibrary } from "@/lib/seed-demo-library"
 import type { PublishedBuilderTemplate } from "@/store/template-library-store"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { ChevronRight, Plus } from "lucide-react"
@@ -39,6 +42,9 @@ export function QuotePdfTemplatesPage() {
   const duplicatePublishedRecord = useTemplateLibraryStore(
     (s) => s.duplicatePublishedRecord,
   )
+  const deletePublishedTemplate = useTemplateLibraryStore(
+    (s) => s.deletePublishedTemplate,
+  )
 
   const [demoView, setDemoView] = useTemplatesPageDemoView()
   const displayTemplates = useMemo(
@@ -49,6 +55,7 @@ export function QuotePdfTemplatesPage() {
   const hasTemplates = displayTemplates.length > 0
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [processingOpen, setProcessingOpen] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [hasUploads, setHasUploads] = useState(false)
   const [creationBrief, setCreationBrief] = useState<string | undefined>()
   const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([])
@@ -96,6 +103,7 @@ export function QuotePdfTemplatesPage() {
 
   const openTemplate = useCallback(
     (record: PublishedBuilderTemplate) => {
+      if (isDefaultPublishedTemplate(record)) return
       navigateToPromptBuilder(
         navigate,
         { template: record.template, name: record.name },
@@ -114,48 +122,42 @@ export function QuotePdfTemplatesPage() {
     [duplicateRecord],
   )
 
-  const handleGenerationComplete = useCallback(() => {
-    setProcessingOpen(false)
-    navigateToPromptBuilder(navigate, {
-      hasUploads,
-      creationBrief,
-      uploadedFileNames,
-    })
-    setCreationBrief(undefined)
-    setUploadedFileNames([])
-  }, [creationBrief, hasUploads, navigate, uploadedFileNames])
-
-  const handleGenerateFromDescription = useCallback((brief: string) => {
-    setCreateModalOpen(false)
-    setCreationBrief(brief)
-    setUploadedFileNames([])
-    setHasUploads(false)
-    setProcessingOpen(true)
-  }, [])
-
-  const handleGenerateFromPdf = useCallback((files: File[]) => {
-    setCreateModalOpen(false)
-    setCreationBrief(undefined)
-    setUploadedFileNames(files.map((file) => file.name))
-    setHasUploads(files.length > 0)
-    setProcessingOpen(true)
-  }, [])
-
-  const handleDuplicateFromModal = useCallback(
-    (templateId: string) => {
-      const source = displayTemplates.find((record) => record.id === templateId)
-      if (!source) return
-      const duplicate = duplicateRecord(source)
-      if (!duplicate) return
-      setCreateModalOpen(false)
-      navigateToPromptBuilder(
-        navigate,
-        { template: duplicate.template, name: duplicate.name },
-        duplicate.id,
+  const handleDelete = useCallback(
+    (record: PublishedBuilderTemplate) => {
+      if (!deletePublishedTemplate(record.id)) return
+      setHighlightTemplateId((current) =>
+        current === record.id ? undefined : current,
       )
     },
-    [displayTemplates, duplicateRecord, navigate],
+    [deletePublishedTemplate],
   )
+
+  const handleGenerationComplete = useCallback(
+    (result: TemplateGenerationResult) => {
+      setProcessingOpen(false)
+      navigateToPromptBuilder(navigate, {
+        hasUploads,
+        creationBrief,
+        uploadedFileNames,
+        template: result.template,
+        extractionSummary: result.extractionSummary ?? undefined,
+        generationStepLabels: result.stepLabels,
+      })
+      setCreationBrief(undefined)
+      setUploadedFileNames([])
+      setPendingFiles([])
+    },
+    [creationBrief, hasUploads, navigate, uploadedFileNames],
+  )
+
+  const handleGenerate = useCallback((files: File[]) => {
+    setCreateModalOpen(false)
+    setPendingFiles(files)
+    setUploadedFileNames(files.map((file) => file.name))
+    setHasUploads(files.length > 0)
+    setCreationBrief(undefined)
+    setProcessingOpen(true)
+  }, [])
 
   const firstTemplateModalVisible = !hasTemplates && !processingOpen
   const additionalTemplateModalVisible = hasTemplates && createModalOpen && !processingOpen
@@ -230,6 +232,7 @@ export function QuotePdfTemplatesPage() {
                   highlighted={record.id === highlightTemplateId}
                   onOpen={() => openTemplate(record)}
                   onDuplicate={() => handleDuplicate(record)}
+                  onDelete={() => handleDelete(record)}
                 />
               ))}
             </div>
@@ -241,27 +244,18 @@ export function QuotePdfTemplatesPage() {
         open={firstTemplateModalVisible}
         onClose={closeCreateModal}
         dismissible={hasTemplates}
-        onGenerate={(files) => {
-          setCreateModalOpen(false)
-          setUploadedFileNames(files.map((file) => file.name))
-          setHasUploads(files.length > 0)
-          setCreationBrief(undefined)
-          setProcessingOpen(true)
-        }}
+        onGenerate={handleGenerate}
       />
 
       <CreateAdditionalTemplateModal
         open={additionalTemplateModalVisible}
         onClose={closeCreateModal}
-        templates={displayTemplates}
-        onGenerateFromDescription={handleGenerateFromDescription}
-        onGenerateFromPdf={handleGenerateFromPdf}
-        onDuplicate={handleDuplicateFromModal}
+        onGenerate={handleGenerate}
       />
 
       <GenerateTemplateProcessingModal
         open={processingOpen}
-        hasUploads={hasUploads}
+        files={pendingFiles}
         onComplete={handleGenerationComplete}
       />
 

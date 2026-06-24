@@ -94,7 +94,13 @@ export function canBlocksFormPair(
   if (rightType === "company_address" && left.type !== "company_logo") {
     return false
   }
-  if (left.type === "company_address") return false
+  if (left.type === "company_address") {
+    return (
+      rightType !== "company_logo" &&
+      rightType !== "company_address" &&
+      blockAllowsHalfWidth(rightType)
+    )
+  }
 
   return true
 }

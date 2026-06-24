@@ -2,41 +2,14 @@ import {
   acceptImportFiles,
   IMPORT_ACCEPT,
 } from "@/lib/import-upload-categories"
+import { TEMPLATE_CREATION_POINTS } from "@/components/templates/template-creation-confidence"
 import {
-  ArrowRight,
   Check,
-  LayoutGrid,
-  Package,
-  Palette,
   Sparkles,
   Upload,
-  Users,
   X,
 } from "lucide-react"
 import { useRef, useState } from "react"
-
-const CONFIDENCE_CARDS = [
-  {
-    icon: Palette,
-    title: "Looks and feels like your brand",
-    description: "Logo, colors, and typography applied from your assets.",
-  },
-  {
-    icon: Users,
-    title: "Built for your customers",
-    description: "Layout tuned to the segments and deal types you sell to.",
-  },
-  {
-    icon: Package,
-    title: "Highlights your offerings",
-    description: "Pricing, entitlements, and product scope front and center.",
-  },
-  {
-    icon: LayoutGrid,
-    title: "Works for every quote type",
-    description: "New business, renewals, amendments — one flexible template.",
-  },
-] as const
 
 const FOOTER_HIGHLIGHTS = [
   "Tone & layout learned from your uploads",
@@ -109,26 +82,17 @@ export function CreateQuoteTemplateModal({
               You can update it anytime.
             </p>
 
-            <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {CONFIDENCE_CARDS.map(({ icon: Icon, title, description }) => (
-                <div
-                  key={title}
-                  className="flex gap-2.5 rounded-lg border border-gray-100 bg-gray-50/40 px-3 py-2.5"
+            <ul className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {TEMPLATE_CREATION_POINTS.map((text) => (
+                <li
+                  key={text}
+                  className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50/40 px-3 py-2.5 text-[12px] text-gray-700"
                 >
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-white/70">
-                    <Icon className="size-3.5 text-gray-400" strokeWidth={1.5} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[12px] font-medium text-gray-700">
-                      {title}
-                    </p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-gray-500">
-                      {description}
-                    </p>
-                  </div>
-                </div>
+                  <span className="size-1 shrink-0 rounded-full bg-gray-400" />
+                  {text}
+                </li>
               ))}
-            </div>
+            </ul>
 
             <div className="mt-6 border-t border-gray-100 pt-5">
               <div className="flex items-center gap-2">
@@ -213,8 +177,8 @@ export function CreateQuoteTemplateModal({
                 onClick={() => onGenerate(files)}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-blue-700"
               >
+                <Sparkles className="size-4" />
                 Generate template
-                <ArrowRight className="size-4" />
               </button>
             </div>
           </div>

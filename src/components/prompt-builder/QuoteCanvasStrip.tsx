@@ -1,7 +1,7 @@
 import { PreviewExportActions } from "@/components/prompt-builder/PreviewExportActions"
 import { PreviewPersonaPicker } from "@/components/prompt-builder/PreviewPersonaPicker"
 import { PreviewScenarioPicker } from "@/components/prompt-builder/PreviewScenarioPicker"
-import { TemplateConditionControl } from "@/components/prompt-builder/TemplateConditionControl"
+import { TemplateConditionStrip } from "@/components/prompt-builder/TemplateConditionStrip"
 import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { Eye, Pencil } from "lucide-react"
@@ -32,18 +32,7 @@ export function CanvasDocumentActions({
     <div
       className={`flex shrink-0 items-center ${variant === "floating" ? "gap-2" : "gap-3"} ${className ?? ""}`}
     >
-      <TemplateConditionControl variant={variant} />
-      <div
-        className="h-5 w-px shrink-0 bg-gray-300"
-        role="separator"
-        aria-orientation="vertical"
-      />
-      <div
-        className={`flex shrink-0 items-center ${
-          variant === "floating" ? "gap-2" : "gap-3"
-        }`}
-      >
-        <PreviewExportActions documentRef={documentRef} variant={variant} />
+      <PreviewExportActions documentRef={documentRef} variant={variant} />
       {isPreview ? (
         <button
           type="button"
@@ -63,7 +52,6 @@ export function CanvasDocumentActions({
           Preview
         </button>
       )}
-      </div>
     </div>
   )
 }
@@ -72,12 +60,15 @@ type ToolbarRowProps = {
   documentRef: RefObject<HTMLDivElement | null>
   variant?: "inline" | "floating"
   className?: string
+  /** Hide export/preview actions (inline row while floating clone is visible). */
+  suppressActions?: boolean
 }
 
 export function CanvasToolbarRow({
   documentRef,
   variant = "inline",
   className,
+  suppressActions = false,
 }: ToolbarRowProps) {
   const editorMode = usePromptBuilderStore((s) => s.editorMode)
   const isPreview = editorMode === "preview"
@@ -89,18 +80,23 @@ export function CanvasToolbarRow({
         isFloating ? "flex-nowrap justify-between" : "flex-wrap gap-y-2"
       } ${className ?? ""}`}
     >
-      {isPreview && (
-        <div className="flex min-w-0 shrink-0 items-center gap-3">
-          <PreviewScenarioPicker variant={variant} className="min-w-0 shrink-0" />
-          <PreviewPersonaPicker />
-        </div>
+      <div className="flex min-w-0 shrink-0 items-center gap-3">
+        <TemplateConditionStrip variant={variant} />
+        {isPreview && (
+          <>
+            <PreviewScenarioPicker variant={variant} className="min-w-0 shrink-0" />
+            <PreviewPersonaPicker />
+          </>
+        )}
+      </div>
+      {!isFloating && !suppressActions && <div className="min-w-0 flex-1" />}
+      {!suppressActions && (
+        <CanvasDocumentActions
+          documentRef={documentRef}
+          variant={variant}
+          className="shrink-0"
+        />
       )}
-      {!isFloating && <div className="min-w-0 flex-1" />}
-      <CanvasDocumentActions
-        documentRef={documentRef}
-        variant={variant}
-        className="shrink-0"
-      />
     </div>
   )
 }
@@ -108,14 +104,22 @@ export function CanvasToolbarRow({
 type InlineToolbarProps = {
   documentRef: RefObject<HTMLDivElement | null>
   anchorRef?: Ref<HTMLDivElement>
+  suppressActions?: boolean
 }
 
-export function CanvasInlineToolbar({ documentRef, anchorRef }: InlineToolbarProps) {
+export function CanvasInlineToolbar({
+  documentRef,
+  anchorRef,
+  suppressActions = false,
+}: InlineToolbarProps) {
   const isSalesPreview = useIsSalesPreview()
 
   return (
     <div ref={anchorRef} className="mb-4">
-      <CanvasToolbarRow documentRef={documentRef} />
+      <CanvasToolbarRow
+        documentRef={documentRef}
+        suppressActions={suppressActions}
+      />
       {isSalesPreview && (
         <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
           Previewing as a salesperson — edit unlocked fields; locked blocks stay

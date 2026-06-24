@@ -6,8 +6,5 @@ type Props = {
 }
 
 export function CompanyLogoBlockView({ block }: Props) {
-  const variant = String(block.content.variant ?? "default")
-  const compact = variant === "compact"
-
-  return <HeaderLogo block={block} compact={compact} />
+  return <HeaderLogo block={block} />
 }

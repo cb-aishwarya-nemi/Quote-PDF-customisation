@@ -78,9 +78,8 @@ export function PreviewExportActions({
 
   const disabled = busy !== null
 
-  const iconBtnClass = `inline-flex size-7 items-center justify-center rounded border border-gray-300 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50${
-    variant === "floating" ? " shadow-sm" : ""
-  }`
+  const iconBtnClass =
+    "inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50"
 
   return (
     <div className="flex shrink-0 items-center gap-2">

@@ -36,6 +36,7 @@ const ACCEPT = IMAGE_BLOCK_ACCEPT
 type PendingPdf = {
   fileName: string
   pdfDataUrl: string
+  pdfBytes?: ArrayBuffer
   pageCount: number
   initialSelected?: number[]
 }
@@ -78,6 +79,7 @@ export function ImageBlockEditor({ blockId, content: raw, caption }: Props) {
     setPendingPdf({
       fileName: pendingImagePdfImport.fileName,
       pdfDataUrl: pendingImagePdfImport.pdfDataUrl,
+      pdfBytes: pendingImagePdfImport.pdfBytes,
       pageCount: pendingImagePdfImport.pageCount,
     })
     setShowPagePicker(true)
@@ -203,7 +205,7 @@ export function ImageBlockEditor({ blockId, content: raw, caption }: Props) {
     showPagePicker && pendingPdf ? (
       <PdfPageImportPicker
         fileName={pendingPdf.fileName}
-        pdfDataUrl={pendingPdf.pdfDataUrl}
+        pdfSource={pendingPdf.pdfBytes ?? pendingPdf.pdfDataUrl}
         pageCount={pendingPdf.pageCount}
         initialSelected={pendingPdf.initialSelected}
         onConfirm={applyPdfImport}

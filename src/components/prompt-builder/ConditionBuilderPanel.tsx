@@ -5,11 +5,14 @@ import {
 } from "@/lib/segment-conditions"
 import type { ConditionOperator, SegmentCondition } from "@/types/prompt-builder"
 import { Plus, Trash2 } from "lucide-react"
+import { forwardRef, type CSSProperties } from "react"
 
 type Props = {
   rules: SegmentCondition | SegmentCondition[] | null
   onChange: (rules: SegmentCondition[] | null) => void
   title?: string
+  className?: string
+  style?: CSSProperties
 }
 
 function ConditionRuleRow({
@@ -151,7 +154,11 @@ function ConditionRuleRow({
   )
 }
 
-export function ConditionBuilderPanel({ rules, onChange, title }: Props) {
+export const ConditionBuilderPanel = forwardRef<HTMLDivElement, Props>(
+  function ConditionBuilderPanel(
+    { rules, onChange, title, className, style },
+    ref,
+  ) {
   const normalized = normalizeConditionRules(rules)
 
   const updateRules = (next: SegmentCondition[]) => {
@@ -175,7 +182,9 @@ export function ConditionBuilderPanel({ rules, onChange, title }: Props) {
 
   return (
     <div
-      className="w-[440px] max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white p-3 shadow-lg"
+      ref={ref}
+      style={style}
+      className={`w-[440px] max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white p-3 shadow-lg ${className ?? ""}`}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -234,4 +243,5 @@ export function ConditionBuilderPanel({ rules, onChange, title }: Props) {
       </div>
     </div>
   )
-}
+},
+)

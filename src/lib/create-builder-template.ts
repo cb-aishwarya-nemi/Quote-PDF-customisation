@@ -2,6 +2,10 @@ import { createId } from "@/lib/create-id"
 import { BLOCK_VARIANTS, LOGO_VARIANTS } from "@/lib/block-variants"
 import { enforceBlockLayoutRules } from "@/lib/block-layout"
 import { defaultLayoutColumnForType } from "@/lib/block-layout-rules"
+import {
+  DEFAULT_COMPANY_LOGO_FILE_NAME,
+  DEFAULT_COMPANY_LOGO_URL,
+} from "@/lib/default-company-logo"
 import { blocksForSource, blocksForVariant } from "@/lib/block-catalog"
 import type {
   BuilderBlock,
@@ -64,9 +68,12 @@ function defaultContent(type: BuilderBlockType): Record<string, unknown> {
     case "company_logo":
       return {
         showLogo: true,
+        logoSource: "image",
         logoVariant: "default",
-        logoUrl: "",
-        logoFileName: "",
+        variant: "default",
+        logoUrl: DEFAULT_COMPANY_LOGO_URL,
+        logoFileName: DEFAULT_COMPANY_LOGO_FILE_NAME,
+        companyName: "Acme Software Inc.",
         logoDisplayCondition: null,
       }
     case "company_address":
@@ -282,6 +289,34 @@ export function normalizeBuilderBlocks(blocks: BuilderBlock[]): BuilderBlock[] {
     ...block,
     order: index,
   }))
+}
+
+export function createBuilderBlockWithContent(
+  type: BuilderBlockType,
+  order: number,
+  contentOverrides?: Record<string, unknown>,
+): BuilderBlock {
+  const block = createBuilderBlock(type, order)
+  if (!contentOverrides || Object.keys(contentOverrides).length === 0) {
+    return block
+  }
+  return {
+    ...block,
+    content: { ...block.content, ...contentOverrides },
+  }
+}
+
+export function buildBuilderTemplate(
+  id: string,
+  blocks: BuilderBlock[],
+  name?: string,
+): BuilderTemplate {
+  return {
+    id,
+    name: name ?? DEFAULT_QUOTE_TEMPLATE_NAME,
+    displayCondition: null,
+    blocks: normalizeBuilderBlocks(blocks),
+  }
 }
 
 export function createStandaloneBuilderBlock(

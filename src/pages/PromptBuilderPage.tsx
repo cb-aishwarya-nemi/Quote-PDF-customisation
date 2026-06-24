@@ -1,20 +1,23 @@
 import { AgentChatPanel } from "@/components/prompt-builder/AgentChatPanel"
+import { PagesPanel } from "@/components/prompt-builder/PagesPanel"
 import { QuoteCanvasArea } from "@/components/prompt-builder/QuoteCanvasArea"
 import { PromptBuilderHeader } from "@/components/prompt-builder/PromptBuilderHeader"
 import { PromptBuilderSkeleton } from "@/components/prompt-builder/PromptBuilderSkeleton"
 import { createBuilderTemplate } from "@/lib/create-builder-template"
 import type { BuilderNavigationState } from "@/lib/navigate-to-builder"
 import { applyCreationContextToTemplate } from "@/lib/derive-template-from-creation"
+import { isDefaultPublishedTemplate } from "@/lib/seed-demo-library"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { useEffect, useLayoutEffect, useState } from "react"
-import { useLocation, useParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
 
 const SKELETON_DURATION_MS = 2800
 
 export function PromptBuilderPage() {
   const { templateId } = useParams<{ templateId: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const initTemplate = usePromptBuilderStore((s) => s.initTemplate)
   const template = usePromptBuilderStore((s) => s.template)
 
@@ -23,8 +26,15 @@ export function PromptBuilderPage() {
     () => !!navState?.fromGeneration,
   )
 
+  useEffect(() => {
+    if (templateId && isDefaultPublishedTemplate(templateId)) {
+      navigate("/templates", { replace: true })
+    }
+  }, [templateId, navigate])
+
   useLayoutEffect(() => {
     if (!templateId) return
+    if (isDefaultPublishedTemplate(templateId)) return
     if (template?.id === templateId) return
 
     useTemplateLibraryStore.getState().ensureInitialized()
@@ -98,6 +108,7 @@ export function PromptBuilderPage() {
         <PromptBuilderSkeleton />
       ) : (
         <div className="flex min-h-0 flex-1 overflow-hidden">
+          <PagesPanel />
           <QuoteCanvasArea />
           <AgentChatPanel />
         </div>

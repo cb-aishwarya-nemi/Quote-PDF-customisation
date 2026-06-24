@@ -1,6 +1,7 @@
+import { BlockBackgroundControls } from "@/components/prompt-builder/BlockBackgroundControls"
+import { BlockBackgroundShell } from "@/components/prompt-builder/BlockBackgroundShell"
 import { BlockWidthControl } from "@/components/prompt-builder/BlockWidthControl"
 import { ConditionBuilderPanel } from "@/components/prompt-builder/ConditionBuilderPanel"
-import { HeaderBackgroundControls } from "@/components/prompt-builder/HeaderBackgroundControls"
 import { VariantPicker } from "@/components/prompt-builder/VariantPicker"
 import { useBlockLayoutHints } from "@/hooks/use-block-layout-hints"
 import { useCanEditBlockStructure, useIsSalesMode, useIsTemplateEditMode } from "@/hooks/use-builder-editor-mode"
@@ -11,6 +12,7 @@ import {
   normalizeConditionRules,
 } from "@/lib/segment-conditions"
 import { BLOCK_VARIANTS, getVariantLabel } from "@/lib/block-variants"
+import { hasBlockBackground } from "@/lib/block-background"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import type { BlockDisplayCondition, BuilderBlock } from "@/types/prompt-builder"
 import { Filter, GripVertical, LayoutGrid, Lock, Trash2, TriangleAlert, Unlock, X } from "lucide-react"
@@ -56,6 +58,13 @@ export function BlockChrome({
   const isLocked = isBlockLocked(block.content)
   const layoutHints = useBlockLayoutHints(block.id)
   const hasLayoutHint = isTemplateEdit && layoutHints.length > 0
+  const hasBg = hasBlockBackground(block.content)
+
+  const blockContent = hasBg ? (
+    <BlockBackgroundShell block={block}>{children}</BlockBackgroundShell>
+  ) : (
+    <div className="p-5">{children}</div>
+  )
 
   useEffect(() => {
     if (!conditionOpen && !variantOpen) return
@@ -71,22 +80,61 @@ export function BlockChrome({
 
   const showAdminControls = canEditStructure
 
+  if (block.type === "company_logo") {
+    return (
+      <div className={`group/block relative ${isDragging ? "opacity-95" : ""}`}>
+        {showAdminControls && dragHandleProps && (
+          <button
+            type="button"
+            className="absolute left-0 top-3 flex w-5 -translate-x-full cursor-grab items-center justify-center pr-1 text-gray-300 opacity-0 transition-opacity hover:text-gray-500 group-hover/block:opacity-100 active:cursor-grabbing"
+            aria-label="Drag to reorder"
+            onClick={(e) => e.stopPropagation()}
+            {...dragHandleProps}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        )}
+
+        <div
+          className="relative min-w-0"
+          onClick={() => setSelectedBlockId(block.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") setSelectedBlockId(block.id)
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          {showAdminControls && (
+            <div className="pointer-events-none absolute right-2 top-2 z-20 opacity-0 transition-opacity group-hover/block:opacity-100 group-focus-within/block:opacity-100">
+              <div className="pointer-events-auto">
+                <BlockBackgroundControls block={block} />
+              </div>
+            </div>
+          )}
+          {blockContent}
+        </div>
+      </div>
+    )
+  }
+
   const shellClasses = (() => {
-    const base = "relative min-w-0 rounded-xl border bg-white transition-all"
+    const base = `relative min-w-0 rounded-xl border transition-all ${
+      hasBg ? "overflow-visible bg-transparent" : "bg-white"
+    }`
 
     if (isSelected) {
       return `${base} border-blue-400 shadow-[0_8px_24px_-4px_rgba(37,99,235,0.18)]`
     }
 
     if (isLocked && isSales) {
-      return `${base} border-transparent bg-slate-50/40 hover:border-blue-200 hover:shadow-sm`
+      return `${base} border-transparent bg-slate-50/40 hover:border-blue-300 hover:shadow-[0_4px_16px_-4px_rgba(37,99,235,0.22)] hover:ring-1 hover:ring-blue-100`
     }
 
     if (hasLayoutHint) {
-      return `${base} border-transparent hover:border-amber-300 hover:shadow-sm`
+      return `${base} border-transparent hover:border-amber-400 hover:shadow-[0_4px_16px_-4px_rgba(245,158,11,0.18)] hover:ring-1 hover:ring-amber-100`
     }
 
-    return `${base} border-transparent hover:border-blue-200 hover:shadow-sm`
+    return `${base} border-transparent hover:border-blue-300 hover:shadow-[0_4px_16px_-4px_rgba(37,99,235,0.22)] hover:ring-1 hover:ring-blue-100`
   })()
 
   return (
@@ -193,11 +241,9 @@ export function BlockChrome({
               )}
             </div>
 
-            {block.type === "quote_summary_header" && (
-              <div className="pointer-events-auto">
-                <HeaderBackgroundControls block={block} />
-              </div>
-            )}
+            <div className="pointer-events-auto">
+              <BlockBackgroundControls block={block} />
+            </div>
 
             <div className="group/lock relative pointer-events-auto">
               <button
@@ -297,7 +343,7 @@ export function BlockChrome({
           </div>
         )}
 
-        <div className="p-5">{children}</div>
+        {blockContent}
       </div>
     </div>
   )

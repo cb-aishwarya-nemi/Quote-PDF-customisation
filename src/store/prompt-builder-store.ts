@@ -1,3 +1,21 @@
+import { createId } from "@/lib/create-id"
+import { flushBuilderAutosave } from "@/lib/builder-autosave"
+import {
+  normalizeTemplatePages,
+  normalizeTemplatePageOrder,
+  QUOTE_PAGE_ID,
+  resolveCustomPages,
+} from "@/lib/template-pages"
+import {
+  findBlockInTemplate,
+  findBlockPageId,
+  getAddableBlockTypesForPage,
+  getBlocksForPage,
+  getCustomPageKind,
+  INTRO_ONLY_BLOCK_TYPES,
+  resolveBlockEditPageId,
+  setBlocksForPage,
+} from "@/lib/page-blocks"
 import { BLOCK_VARIANTS } from "@/lib/block-variants"
 import { isBlockLocked } from "@/lib/block-lock"
 import {
@@ -20,18 +38,24 @@ import {
 import {
   blocksAreActivePair,
   enforceBlockLayoutRules,
+  removeBlockFromLayout,
   setBlockCanvasWidth as applyBlockCanvasWidth,
   setBlockLayoutColumn,
 } from "@/lib/block-layout"
+import {
+  applyBlockDrop,
+  type BlockDropTarget,
+} from "@/lib/block-layout-drag"
 import { canBlocksFormPair } from "@/lib/block-layout-rules"
 import {
   formatVariablesListReply,
 } from "@/lib/derive-template-variables"
-import { createId } from "@/lib/create-id"
 import {
   makeCreationBriefReply,
+  makeExtractionSummaryMessage,
   makeGenerationSummaryMessage,
 } from "@/lib/template-generation-steps"
+import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
 import {
   applyAgentDemoChanges,
   DEMO_USER_PROMPT,
@@ -78,7 +102,29 @@ function findTemplateBlock(
   template: BuilderTemplate | null,
   blockId: string,
 ): BuilderBlock | undefined {
-  return template?.blocks.find((b) => b.id === blockId)
+  return findBlockInTemplate(template, blockId)
+}
+
+function normalizePageBlocks(blocks: BuilderBlock[]): BuilderBlock[] {
+  return enforceBlockLayoutRules(blocks).map((block, index) => ({
+    ...block,
+    order: index,
+  }))
+}
+
+function applyPageBlocks(
+  set: (partial: Partial<PromptBuilderStore> | ((s: PromptBuilderStore) => Partial<PromptBuilderStore>)) => void,
+  pageId: string,
+  blocks: BuilderBlock[],
+  selectedBlockId?: string | null,
+) {
+  set((s) => {
+    if (!s.template) return s
+    return {
+      template: setBlocksForPage(s.template, pageId, normalizePageBlocks(blocks)),
+      selectedBlockId: selectedBlockId ?? s.selectedBlockId,
+    }
+  })
 }
 function findBlockByType(template: BuilderTemplate, type: BuilderBlock["type"]) {
   return template.blocks.find((b) => b.type === type)
@@ -104,20 +150,9 @@ function applyBlockOrder(
   set: (partial: Partial<PromptBuilderStore> | ((s: PromptBuilderStore) => Partial<PromptBuilderStore>)) => void,
   blocks: BuilderBlock[],
   selectedBlockId?: string | null,
+  pageId: string = QUOTE_PAGE_ID,
 ) {
-  set((s) => {
-    if (!s.template) return s
-    return {
-      template: {
-        ...s.template,
-        blocks: enforceBlockLayoutRules(blocks).map((block, index) => ({
-          ...block,
-          order: index,
-        })),
-      },
-      selectedBlockId: selectedBlockId ?? s.selectedBlockId,
-    }
-  })
+  applyPageBlocks(set, pageId, blocks, selectedBlockId)
 }
 
 function tryLayoutFixReply(
@@ -237,12 +272,25 @@ type PromptBuilderStore = {
     blockId: string
     fileName: string
     pdfDataUrl: string
+    pdfBytes: ArrayBuffer
+    pageCount: number
+  } | null
+  /** PDF picked for intro page — opens page picker when intro editor mounts */
+  pendingIntroPdfImport: {
+    pageId: string
+    fileName: string
+    pdfDataUrl: string
+    pdfBytes?: ArrayBuffer
     pageCount: number
   } | null
 
   initTemplate: (
     template: BuilderTemplate,
-    options?: { generationStepLabels?: string[]; creationBrief?: string },
+    options?: {
+      generationStepLabels?: string[]
+      creationBrief?: string
+      extractionSummary?: PdfExtractionSummary
+    },
   ) => void
   openPreview: () => void
   closePreview: () => void
@@ -251,17 +299,39 @@ type PromptBuilderStore = {
   closeSalesEdit: () => void
   setTemplateName: (name: string) => void
   setTemplateDisplayCondition: (condition: BlockDisplayCondition) => void
+  addPage: () => void
+  addIntroPage: () => void
+  updatePage: (pageId: string, content: Record<string, unknown>) => void
+  updateIntroPage: (content: Record<string, unknown>) => void
+  removePage: (pageId: string) => void
+  removeIntroPage: () => void
+  reorderPages: (fromIndex: number, toIndex: number) => void
+  activePageId: string
+  setActivePageId: (pageId: string) => void
   setSelectedBlockId: (id: string | null) => void
   setActiveScenario: (scenario: PreviewScenario) => void
   updateBlockContent: (blockId: string, content: Record<string, unknown>) => void
   updateBlockField: (blockId: string, field: string, value: unknown) => void
-  addBlock: (type: BuilderBlockType, afterId?: string) => void
-  addBlockBeside: (blockId: string, type: BuilderBlockType) => void
+  addBlock: (type: BuilderBlockType, afterId?: string, pageId?: string) => void
+  addBlockBeside: (blockId: string, type: BuilderBlockType, pageId?: string) => void
   addImageBlockFromFile: (file: File, afterId?: string) => void
   addImageBlockFromFileBeside: (file: File, blockId: string) => void
   clearPendingImagePdfImport: () => void
+  setPendingIntroPdfImport: (payload: {
+    pageId: string
+    fileName: string
+    pdfDataUrl: string
+    pdfBytes?: ArrayBuffer
+    pageCount: number
+  }) => void
+  clearPendingIntroPdfImport: () => void
   removeBlock: (blockId: string) => void
-  reorderBlocks: (from: number, to: number) => void
+  reorderBlocks: (from: number, to: number, pageId?: string) => void
+  moveBlockDrop: (
+    blockId: string,
+    target: BlockDropTarget,
+    pageId?: string,
+  ) => void
   setBlockCanvasWidth: (blockId: string, width: "half" | "full") => void
   setBlockVariant: (blockId: string, variant: string) => void
   setBlockDisplayCondition: (
@@ -771,6 +841,8 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   isAgentTyping: false,
   ignoredValidationIssueIds: [],
   pendingImagePdfImport: null,
+  pendingIntroPdfImport: null,
+  activePageId: QUOTE_PAGE_ID,
 
   initTemplate: (template, options) => {
     const brief = options?.creationBrief?.trim()
@@ -778,11 +850,19 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
     let messages: ChatMessage[]
 
+    const summaryMessage =
+      options?.extractionSummary && options.generationStepLabels?.length
+        ? makeExtractionSummaryMessage(
+            options.generationStepLabels,
+            options.extractionSummary,
+          )
+        : options?.generationStepLabels?.length
+          ? makeGenerationSummaryMessage(options.generationStepLabels)
+          : null
+
     if (brief) {
       messages = [
-        ...(options?.generationStepLabels?.length
-          ? [makeGenerationSummaryMessage(options.generationStepLabels)]
-          : []),
+        ...(summaryMessage ? [summaryMessage] : []),
         {
           id: "creation-user",
           role: "user",
@@ -791,9 +871,9 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
         },
         makeCreationBriefReply(brief),
       ]
-    } else if (options?.generationStepLabels?.length) {
+    } else if (summaryMessage) {
       messages = [
-        makeGenerationSummaryMessage(options.generationStepLabels),
+        summaryMessage,
         {
           id: "welcome",
           role: "assistant",
@@ -814,17 +894,19 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
     }
 
     set({
-      template: {
+      template: normalizeTemplatePages({
         ...template,
         blocks: normalizeBuilderBlocks(template.blocks),
-      },
+      }),
       selectedBlockId: null,
       editorMode: "edit",
       previewPersona: "admin",
       messages,
       activeScenario: PREVIEW_SCENARIOS[0],
       pendingImagePdfImport: null,
+      pendingIntroPdfImport: null,
       ignoredValidationIssueIds: [],
+      activePageId: QUOTE_PAGE_ID,
     })
   },
 
@@ -851,7 +933,166 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
         : s,
     ),
 
+  addPage: () =>
+    set((s) => {
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) {
+        return s
+      }
+
+      const template = normalizeTemplatePages(s.template)
+      const customPages = resolveCustomPages(template)
+      const pageId = createId("page")
+      const label = customPages.length === 0 ? "Cover" : `Page ${customPages.length + 1}`
+      const order = normalizeTemplatePageOrder(template)
+      const quoteIndex = order.indexOf(QUOTE_PAGE_ID)
+      const nextOrder =
+        quoteIndex >= 0
+          ? [...order.slice(0, quoteIndex), pageId, ...order.slice(quoteIndex)]
+          : [...order, pageId]
+
+      return {
+        template: {
+          ...template,
+          customPages: [
+            ...customPages,
+            customPages.length === 0
+              ? {
+                  id: pageId,
+                  label,
+                  kind: "intro" as const,
+                  content: { placeholder: true, alt: label },
+                }
+              : {
+                  id: pageId,
+                  label,
+                  kind: "blocks" as const,
+                  blocks: [],
+                },
+          ],
+          pageOrder: nextOrder,
+          introPage: undefined,
+        },
+        activePageId: pageId,
+        selectedBlockId: null,
+      }
+    }),
+
+  addIntroPage: () => get().addPage(),
+
+  updatePage: (pageId, content) =>
+    set((s) => {
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) {
+        return s
+      }
+      const template = normalizeTemplatePages(s.template)
+      const customPages = resolveCustomPages(template)
+      const index = customPages.findIndex((page) => page.id === pageId)
+      if (index < 0) return s
+
+      const page = customPages[index]
+      if (getCustomPageKind(page) !== "intro") return s
+
+      const nextPages = customPages.map((entry, i) =>
+        i === index
+          ? {
+              ...entry,
+              content: { ...(entry.content ?? {}), ...content },
+            }
+          : entry,
+      )
+
+      return {
+        template: {
+          ...template,
+          customPages: nextPages,
+          introPage: undefined,
+        },
+      }
+    }),
+
+  updateIntroPage: (content) => {
+    const template = get().template
+    if (!template) return
+    const firstCustom = resolveCustomPages(template)[0]
+    if (firstCustom) get().updatePage(firstCustom.id, content)
+  },
+
+  removePage: (pageId) => {
+    set((s) => {
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) {
+        return s
+      }
+      if (pageId === QUOTE_PAGE_ID) return s
+
+      const selectedOnDeletedPage =
+        s.selectedBlockId != null &&
+        findBlockPageId(s.template, s.selectedBlockId) === pageId
+
+      const customPages = resolveCustomPages(s.template).filter(
+        (page) => page.id !== pageId,
+      )
+      const order = normalizeTemplatePageOrder({
+        ...s.template,
+        customPages,
+        introPage: null,
+      }).filter((id) => id !== pageId)
+
+      return {
+        template: normalizeTemplatePages({
+          ...s.template,
+          customPages,
+          pageOrder: order,
+          introPage: null,
+        }),
+        activePageId:
+          s.activePageId === pageId ? QUOTE_PAGE_ID : s.activePageId,
+        selectedBlockId:
+          s.activePageId === pageId || selectedOnDeletedPage
+            ? null
+            : s.selectedBlockId,
+        pendingIntroPdfImport:
+          s.pendingIntroPdfImport?.pageId === pageId
+            ? null
+            : s.pendingIntroPdfImport,
+      }
+    })
+    flushBuilderAutosave()
+  },
+
+  removeIntroPage: () => {
+    const template = get().template
+    if (!template) return
+    const firstCustom = resolveCustomPages(template)[0]
+    if (firstCustom) get().removePage(firstCustom.id)
+  },
+
+  reorderPages: (fromIndex, toIndex) =>
+    set((s) => {
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) {
+        return s
+      }
+      if (fromIndex === toIndex) return s
+      const order = normalizeTemplatePageOrder(s.template)
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= order.length ||
+        toIndex >= order.length
+      ) {
+        return s
+      }
+      return {
+        template: normalizeTemplatePages({
+          ...s.template,
+          pageOrder: arrayMove(order, fromIndex, toIndex),
+        }),
+      }
+    }),
+
   setSelectedBlockId: (id) => set({ selectedBlockId: id }),
+
+  setActivePageId: (pageId) =>
+    set({ activePageId: pageId, selectedBlockId: null }),
 
   setActiveScenario: (scenario) => set({ activeScenario: scenario }),
 
@@ -860,13 +1101,28 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       if (!s.template) return s
       const block = findTemplateBlock(s.template, blockId)
       if (blockLockedInSalesMode(s.editorMode, s.previewPersona, block)) return s
-      return {
-        template: {
-          ...s.template,
-          blocks: s.template.blocks.map((b) =>
+      if (!block) return s
+
+      const quoteIndex = s.template.blocks.findIndex((b) => b.id === blockId)
+      if (quoteIndex >= 0) {
+        const blocks = s.template.blocks.map((b) =>
+          b.id === blockId ? { ...b, content: { ...b.content, ...content } } : b,
+        )
+        return { template: { ...s.template, blocks } }
+      }
+
+      const customPages = resolveCustomPages(s.template).map((page) => {
+        if (!page.blocks?.some((b) => b.id === blockId)) return page
+        return {
+          ...page,
+          blocks: page.blocks.map((b) =>
             b.id === blockId ? { ...b, content: { ...b.content, ...content } } : b,
           ),
-        },
+        }
+      })
+
+      return {
+        template: { ...s.template, customPages, introPage: undefined },
       }
     }),
 
@@ -880,23 +1136,49 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       ) {
         return s
       }
+      if (!block) return s
+
+      const patchBlock = (b: BuilderBlock) =>
+        b.id === blockId
+          ? { ...b, content: { ...b.content, [field]: value } }
+          : b
+
+      const quoteIndex = s.template.blocks.findIndex((b) => b.id === blockId)
+      if (quoteIndex >= 0) {
+        return {
+          template: {
+            ...s.template,
+            blocks: s.template.blocks.map(patchBlock),
+          },
+        }
+      }
+
+      const customPages = resolveCustomPages(s.template).map((page) => {
+        if (!page.blocks?.some((b) => b.id === blockId)) return page
+        return { ...page, blocks: page.blocks.map(patchBlock) }
+      })
+
       return {
-        template: {
-          ...s.template,
-          blocks: s.template.blocks.map((b) =>
-            b.id === blockId
-              ? { ...b, content: { ...b.content, [field]: value } }
-              : b,
-          ),
-        },
+        template: { ...s.template, customPages, introPage: undefined },
       }
     }),
 
-  addBlock: (type, afterId) =>
+  addBlock: (type, afterId, pageId) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
       if (!ADDABLE_BLOCKS.some((entry) => entry.type === type)) return s
-      const blocks = [...s.template.blocks]
+      if (INTRO_ONLY_BLOCK_TYPES.includes(type)) return s
+
+      const targetPageId =
+        pageId ??
+        (afterId && afterId !== "__start__"
+          ? findBlockPageId(s.template, afterId)
+          : undefined) ??
+        resolveBlockEditPageId(s.template, s.activePageId)
+      const allowed = getAddableBlockTypesForPage(s.template, targetPageId)
+      if (!allowed.includes(type)) return s
+
+      const blocks = [...getBlocksForPage(s.template, targetPageId)]
       const newBlock = createStandaloneBuilderBlock(type, blocks.length)
       if (afterId === "__start__") {
         blocks.splice(0, 0, newBlock)
@@ -907,19 +1189,26 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
         blocks.push(newBlock)
       }
       return {
-        template: {
-          ...s.template,
-          blocks: enforceBlockLayoutRules(blocks).map((b, i) => ({ ...b, order: i })),
-        },
+        template: setBlocksForPage(s.template, targetPageId, normalizePageBlocks(blocks)),
         selectedBlockId: newBlock.id,
+        activePageId: targetPageId,
       }
     }),
 
-  addBlockBeside: (blockId, type) =>
+  addBlockBeside: (blockId, type, pageId) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
       if (!ADDABLE_BLOCKS.some((entry) => entry.type === type)) return s
-      const blocks = [...s.template.blocks]
+      if (INTRO_ONLY_BLOCK_TYPES.includes(type)) return s
+
+      const targetPageId =
+        pageId ??
+        findBlockPageId(s.template, blockId) ??
+        resolveBlockEditPageId(s.template, s.activePageId)
+      const allowed = getAddableBlockTypesForPage(s.template, targetPageId)
+      if (!allowed.includes(type)) return s
+
+      const blocks = [...getBlocksForPage(s.template, targetPageId)]
       const index = blocks.findIndex((b) => b.id === blockId)
       if (index < 0) return s
 
@@ -936,11 +1225,9 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       blocks.splice(index + 1, 0, newBlock)
 
       return {
-        template: {
-          ...s.template,
-          blocks: enforceBlockLayoutRules(blocks).map((b, i) => ({ ...b, order: i })),
-        },
+        template: setBlocksForPage(s.template, targetPageId, normalizePageBlocks(blocks)),
         selectedBlockId: newBlock.id,
+        activePageId: targetPageId,
       }
     }),
 
@@ -969,6 +1256,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
               blockId,
               fileName: prepared.fileName,
               pdfDataUrl: prepared.pdfDataUrl,
+              pdfBytes: prepared.pdfBytes,
               pageCount: prepared.pageCount,
             },
           })
@@ -1011,6 +1299,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
               blockId: selectedId,
               fileName: prepared.fileName,
               pdfDataUrl: prepared.pdfDataUrl,
+              pdfBytes: prepared.pdfBytes,
               pageCount: prepared.pageCount,
             },
           })
@@ -1030,49 +1319,108 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   clearPendingImagePdfImport: () => set({ pendingImagePdfImport: null }),
 
+  setPendingIntroPdfImport: (payload) => set({ pendingIntroPdfImport: payload }),
+
+  clearPendingIntroPdfImport: () => set({ pendingIntroPdfImport: null }),
+
   removeBlock: (blockId) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
-      const blocks = enforceBlockLayoutRules(
-        s.template.blocks.filter((b) => b.id !== blockId),
-      )
+
+      if (s.template.blocks.some((b) => b.id === blockId)) {
+        const blocks = normalizePageBlocks(
+          removeBlockFromLayout(s.template.blocks, blockId),
+        )
+        return {
+          template: { ...s.template, blocks },
+          selectedBlockId:
+            s.selectedBlockId === blockId ? null : s.selectedBlockId,
+        }
+      }
+
+      const customPages = resolveCustomPages(s.template).map((page) => {
+        if (!page.blocks?.some((b) => b.id === blockId)) return page
+        return {
+          ...page,
+          blocks: normalizePageBlocks(
+            removeBlockFromLayout(page.blocks, blockId),
+          ),
+        }
+      })
+
       return {
-        template: {
-          ...s.template,
-          blocks: blocks.map((b, i) => ({ ...b, order: i })),
-        },
+        template: { ...s.template, customPages, introPage: undefined },
         selectedBlockId:
           s.selectedBlockId === blockId ? null : s.selectedBlockId,
       }
     }),
 
-  reorderBlocks: (from, to) =>
+  reorderBlocks: (from, to, pageId) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
-      const blocks = enforceBlockLayoutRules(arrayMove(s.template.blocks, from, to))
+
+      const targetPageId =
+        pageId ?? resolveBlockEditPageId(s.template, s.activePageId)
+      const blocks = normalizePageBlocks(
+        arrayMove(getBlocksForPage(s.template, targetPageId), from, to),
+      )
+      return { template: setBlocksForPage(s.template, targetPageId, blocks) }
+    }),
+
+  moveBlockDrop: (blockId, target, pageId) =>
+    set((s) => {
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) {
+        return s
+      }
+
+      const targetPageId =
+        pageId ?? resolveBlockEditPageId(s.template, s.activePageId)
+      const currentBlocks = getBlocksForPage(s.template, targetPageId)
+      const nextBlocks = applyBlockDrop(currentBlocks, blockId, target)
+      if (nextBlocks === currentBlocks) return s
+
       return {
-        template: {
-          ...s.template,
-          blocks: blocks.map((b, i) => ({ ...b, order: i })),
-        },
+        template: setBlocksForPage(
+          s.template,
+          targetPageId,
+          normalizePageBlocks(nextBlocks),
+        ),
       }
     }),
 
   setBlockCanvasWidth: (blockId, width) =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
-      const blocks = applyBlockCanvasWidth(s.template.blocks, blockId, width)
+
+      if (s.template.blocks.some((b) => b.id === blockId)) {
+        const blocks = normalizePageBlocks(
+          applyBlockCanvasWidth(s.template.blocks, blockId, width),
+        )
+        return { template: { ...s.template, blocks } }
+      }
+
+      const customPages = resolveCustomPages(s.template).map((page) => {
+        if (!page.blocks?.some((b) => b.id === blockId)) return page
+        return {
+          ...page,
+          blocks: normalizePageBlocks(
+            applyBlockCanvasWidth(page.blocks, blockId, width),
+          ),
+        }
+      })
+
       return {
-        template: {
-          ...s.template,
-          blocks: blocks.map((b, i) => ({ ...b, order: i })),
-        },
+        template: { ...s.template, customPages, introPage: undefined },
       }
     }),
 
   setBlockVariant: (blockId, variant) => {
     if (get().editorMode !== "edit") return
     get().updateBlockField(blockId, "variant", variant)
+    const block = findTemplateBlock(get().template, blockId)
+    if (block?.type === "company_logo") {
+      get().updateBlockField(blockId, "logoVariant", variant)
+    }
   },
 
   setBlockDisplayCondition: (blockId, condition) => {
@@ -1089,7 +1437,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
     if (get().editorMode !== "edit") return
     const { template } = get()
     if (!template) return
-    const block = template.blocks.find((b) => b.id === blockId)
+    const block = findTemplateBlock(template, blockId)
     if (!block) return
     const options = BLOCK_VARIANTS[block.type]
     const current = String(block.content.variant ?? options[0]?.id)

@@ -57,6 +57,26 @@ export type ConditionalSegment = {
   text: string
 }
 
+import type { ImageBlockContent } from "@/types/image-block"
+
+export type IntroPageContent = ImageBlockContent
+
+export type CustomPageKind = "intro" | "blocks"
+
+export type CustomTemplatePage = {
+  id: string
+  label?: string
+  /** Cover page — image/PDF only. Additional pages use `blocks`. */
+  kind?: CustomPageKind
+  /** Image/PDF content for intro pages */
+  content?: IntroPageContent
+  /** Editable blocks for non-intro custom pages */
+  blocks?: BuilderBlock[]
+}
+
+/** Page id — `"quote"` for the main quote document, or a custom page id */
+export type TemplatePageId = string
+
 export type BuilderBlock = {
   id: string
   type: BuilderBlockType
@@ -71,6 +91,12 @@ export type BuilderTemplate = {
   presetId?: string
   /** When set, template only applies to quotes matching these rules */
   displayCondition?: BlockDisplayCondition
+  /** @deprecated Migrated to customPages on read */
+  introPage?: IntroPageContent | null
+  /** Image/PDF pages shown alongside the quote document */
+  customPages?: CustomTemplatePage[]
+  /** Order of page ids (custom page ids + quote) */
+  pageOrder?: TemplatePageId[]
   blocks: BuilderBlock[]
 }
 

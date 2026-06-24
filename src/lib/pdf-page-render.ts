@@ -1,7 +1,89 @@
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist"
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url"
+import {
+  getDocument,
+  GlobalWorkerOptions,
+  type PDFDocumentLoadingTask,
+  type PDFDocumentProxy,
+} from "pdfjs-dist/legacy/build/pdf.mjs"
+import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"
 
 GlobalWorkerOptions.workerSrc = pdfWorker
+
+export type PdfSource = string | ArrayBuffer | Uint8Array
+
+export type PreparedPdfUpload = {
+  fileName: string
+  pdfDataUrl: string
+  pdfBytes: ArrayBuffer
+  pageCount: number
+}
+
+const pdfDocCache = new Map<string, Promise<PDFDocumentProxy>>()
+
+function getPdfAssetBase(): string {
+  if (typeof window === "undefined") return "/pdfjs/"
+  const base = import.meta.env.BASE_URL || "/"
+  return new URL("pdfjs/", `${window.location.origin}${base}`).href
+}
+
+function getPdfDocumentOptions(data: Uint8Array) {
+  const assetBase = getPdfAssetBase()
+  return {
+    data,
+    cMapUrl: `${assetBase}cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${assetBase}standard_fonts/`,
+    wasmUrl: `${assetBase}wasm/`,
+    useWorkerFetch: true,
+    isEvalSupported: false,
+  }
+}
+
+function toUint8Array(source: PdfSource): Uint8Array {
+  if (typeof source === "string") return dataUrlToUint8Array(source)
+  if (source instanceof ArrayBuffer) {
+    return new Uint8Array(source.slice(0))
+  }
+  return new Uint8Array(source)
+}
+
+function cacheKeyForSource(source: PdfSource): string {
+  if (typeof source === "string") {
+    return `url:${source.length}:${source.slice(0, 64)}`
+  }
+  const bytes = toUint8Array(source)
+  return `buf:${bytes.byteLength}:${bytes[0] ?? 0}:${bytes[1] ?? 0}:${bytes[2] ?? 0}`
+}
+
+function dataUrlToUint8Array(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] ?? "" : dataUrl
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
+export function clearPdfDocumentCache() {
+  pdfDocCache.clear()
+}
+
+function createLoadingTask(source: PdfSource): PDFDocumentLoadingTask {
+  return getDocument(getPdfDocumentOptions(toUint8Array(source)))
+}
+
+export function loadPdfDocument(source: PdfSource): Promise<PDFDocumentProxy> {
+  const key = cacheKeyForSource(source)
+  let cached = pdfDocCache.get(key)
+  if (!cached) {
+    cached = createLoadingTask(source).promise.catch((error) => {
+      pdfDocCache.delete(key)
+      throw error
+    })
+    pdfDocCache.set(key, cached)
+  }
+  return cached
+}
 
 export async function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -12,68 +94,66 @@ export async function readFileAsDataUrl(file: File): Promise<string> {
   })
 }
 
-function dataUrlToUint8Array(dataUrl: string): Uint8Array {
-  const base64 = dataUrl.split(",")[1] ?? ""
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return bytes
-}
-
-export async function renderPdfPageToDataUrl(
-  pdfDataUrl: string,
+async function renderPageToCanvas(
+  source: PdfSource,
   pageNumber: number,
-  scale = 1.5,
+  scale: number,
 ): Promise<string> {
-  const pdf = await getDocument({ data: dataUrlToUint8Array(pdfDataUrl) }).promise
+  const pdf = await loadPdfDocument(source)
   const page = await pdf.getPage(pageNumber)
   const viewport = page.getViewport({ scale })
   const canvas = document.createElement("canvas")
   const context = canvas.getContext("2d")
   if (!context) throw new Error("Canvas not supported")
 
-  canvas.width = viewport.width
-  canvas.height = viewport.height
+  canvas.width = Math.max(1, Math.floor(viewport.width))
+  canvas.height = Math.max(1, Math.floor(viewport.height))
 
-  await page.render({ canvas, canvasContext: context, viewport }).promise
+  const renderTask = page.render({ canvas, viewport })
+  await renderTask.promise
   return canvas.toDataURL("image/png")
 }
 
+export async function renderPdfPageToDataUrl(
+  source: PdfSource,
+  pageNumber: number,
+  scale = 1.5,
+): Promise<string> {
+  return renderPageToCanvas(source, pageNumber, scale)
+}
+
 export async function renderPdfPageThumbnail(
-  pdfDataUrl: string,
+  source: PdfSource,
   pageNumber: number,
 ): Promise<string> {
-  return renderPdfPageToDataUrl(pdfDataUrl, pageNumber, 0.4)
+  return renderPageToCanvas(source, pageNumber, 0.4)
 }
 
 export async function renderPdfPagesToDataUrls(
-  pdfDataUrl: string,
+  source: PdfSource,
   pageNumbers: number[],
   scale = 1.5,
 ): Promise<{ page: number; previewUrl: string }[]> {
   const sorted = [...pageNumbers].sort((a, b) => a - b)
   const results: { page: number; previewUrl: string }[] = []
   for (const page of sorted) {
-    const previewUrl = await renderPdfPageToDataUrl(pdfDataUrl, page, scale)
+    const previewUrl = await renderPageToCanvas(source, page, scale)
     results.push({ page, previewUrl })
   }
   return results
 }
 
-export async function preparePdfUpload(file: File): Promise<{
-  fileName: string
-  pdfDataUrl: string
-  pageCount: number
-}> {
+export async function preparePdfUpload(file: File): Promise<PreparedPdfUpload> {
+  clearPdfDocumentCache()
+  const rawBytes = await file.arrayBuffer()
+  const pdfBytes = rawBytes.slice(0)
   const pdfDataUrl = await readFileAsDataUrl(file)
-  const pageCount = await getPdfPageCount(pdfDataUrl)
-  return { fileName: file.name, pdfDataUrl, pageCount }
+  const pageCount = await getPdfPageCount(pdfBytes)
+  return { fileName: file.name, pdfDataUrl, pdfBytes, pageCount }
 }
 
-export async function getPdfPageCount(pdfDataUrl: string): Promise<number> {
-  const pdf = await getDocument({ data: dataUrlToUint8Array(pdfDataUrl) }).promise
+export async function getPdfPageCount(source: PdfSource): Promise<number> {
+  const pdf = await loadPdfDocument(source)
   return pdf.numPages
 }
 
@@ -98,8 +178,8 @@ export async function loadImageBlockFromFile(file: File): Promise<{
   importedPages?: { page: number; previewUrl: string }[]
 }> {
   if (isPdfFile(file)) {
-    const { fileName, pdfDataUrl, pageCount } = await preparePdfUpload(file)
-    const importedPages = await renderPdfPagesToDataUrls(pdfDataUrl, [1])
+    const { fileName, pdfDataUrl, pdfBytes, pageCount } = await preparePdfUpload(file)
+    const importedPages = await renderPdfPagesToDataUrls(pdfBytes, [1])
     return {
       fileName,
       mediaType: "pdf",

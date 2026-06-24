@@ -28,9 +28,23 @@ export function VariantPreviewThumb({ blockType, variantId, selected }: Props) {
   }`
 
   if (blockType === "company_logo") {
+    if (variantId === "wide") {
+      return (
+        <div className={`${shell} justify-center px-0.5`}>
+          <div className={`h-3 w-full rounded-sm ${accent}`} />
+        </div>
+      )
+    }
+    if (variantId === "compact") {
+      return (
+        <div className={`${shell} items-center justify-center`}>
+          <div className={`size-2.5 rounded-sm ${accent}`} />
+        </div>
+      )
+    }
     return (
       <div className={`${shell} items-center justify-center`}>
-        <div className={`size-4 rounded ${accent}`} />
+        <div className={`size-4 rounded-sm ${accent}`} />
       </div>
     )
   }

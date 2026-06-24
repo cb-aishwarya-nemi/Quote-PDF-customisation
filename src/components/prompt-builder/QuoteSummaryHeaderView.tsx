@@ -1,7 +1,7 @@
 import { EditableLabel, SectionLabel } from "@/components/prompt-builder/EditableLabel"
-import { HeaderBackgroundShell } from "@/components/prompt-builder/HeaderBackgroundShell"
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
 import { VariableField } from "@/components/prompt-builder/VariableField"
+import { hasBlockBackground } from "@/lib/block-background"
 import { DEFAULT_LABELS, staticLabel } from "@/lib/block-static-labels"
 import type { BuilderBlock } from "@/types/prompt-builder"
 
@@ -11,6 +11,18 @@ type Props = {
 }
 const BLOCK_TYPE = "quote_summary_header" as const
 const L = DEFAULT_LABELS.quote_summary_header
+
+function headerInnerShell(variant: string, hasBg: boolean): string {
+  if (hasBg) {
+    if (variant === "centered") return "px-2 py-1 text-center"
+    if (variant === "minimal") return "px-1 py-1"
+    return "px-1 py-1"
+  }
+  if (variant === "centered") {
+    return "rounded-lg border border-gray-100 bg-gray-50/80 px-6 py-5 text-center"
+  }
+  return ""
+}
 
 export function QuoteSummaryHeaderView({ block, onField }: Props) {
   const c = block.content
@@ -22,9 +34,12 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
   const validUntil = staticLabel(c, "validUntilLabel", L.validUntilLabel)
   const validShort = staticLabel(c, "validShortLabel", L.validShortLabel)
 
+  const hasBg = hasBlockBackground(c)
+  const innerShell = headerInnerShell(variant, hasBg)
+
   if (variant === "centered") {
     return (
-      <HeaderBackgroundShell block={block} variant="centered">
+      <div className={innerShell}>
         <InlineEditable
           blockId={block.id}
           value={String(c.title ?? "Quote Summary")}
@@ -99,13 +114,13 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
             />
           </span>
         </div>
-      </HeaderBackgroundShell>
+      </div>
     )
   }
 
   if (variant === "minimal") {
     return (
-      <HeaderBackgroundShell block={block} variant="minimal">
+      <div className={innerShell}>
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-2 text-[13px] text-gray-700">
         <InlineEditable
           blockId={block.id}
@@ -166,12 +181,12 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           className="text-gray-700"
         />
         </div>
-      </HeaderBackgroundShell>
+      </div>
     )
   }
 
   return (
-    <HeaderBackgroundShell block={block} variant="classic">
+    <div className={innerShell}>
       <InlineEditable
         blockId={block.id}
         value={String(c.title ?? "Quote Summary")}
@@ -239,6 +254,6 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           />
         </div>
       </div>
-    </HeaderBackgroundShell>
+    </div>
   )
 }

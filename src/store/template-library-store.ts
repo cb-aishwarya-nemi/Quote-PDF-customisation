@@ -4,6 +4,10 @@ import {
   deriveMockTemplateOwner,
   deriveTemplateDealTypes,
 } from "@/lib/derive-template-library-meta"
+import {
+  createDefaultPublishedTemplate,
+  isDefaultPublishedTemplate,
+} from "@/lib/seed-demo-library"
 import { mockVariants, type GeneratedVariant } from "@/mock/data"
 import type { BuilderTemplate } from "@/types/prompt-builder"
 import type { DealType } from "@/types/prompt-builder"
@@ -49,6 +53,7 @@ type TemplateLibraryStore = {
     name: string
   }) => void
   getPublishedTemplate: (id: string) => PublishedBuilderTemplate | undefined
+  deletePublishedTemplate: (id: string) => boolean
 }
 
 function seedTemplates(): LibraryGeneratedTemplate[] {
@@ -99,7 +104,7 @@ function duplicatePublishedRecordFromSource(
 ): PublishedBuilderTemplate {
   const snapshot = cloneTemplate(source.template)
   snapshot.id = createId("tpl")
-  snapshot.name = `${source.name} copy`
+  snapshot.name = `Copy of ${source.name}`
 
   const stats = deriveTemplateStats(snapshot)
   const now = new Date().toISOString()
@@ -130,11 +135,22 @@ export const useTemplateLibraryStore = create<TemplateLibraryStore>((set, get) =
 
   ensureInitialized: () => {
     if (get().initialized) return
-    set({ templates: seedTemplates(), initialized: true })
+    set({
+      templates: seedTemplates(),
+      publishedTemplates: [createDefaultPublishedTemplate()],
+      initialized: true,
+    })
   },
 
   saveBuilderTemplateDraft: (template) => {
     get().ensureInitialized()
+    if (isDefaultPublishedTemplate(template.id)) {
+      const existing = get().publishedTemplates.find(
+        (entry) => entry.id === template.id,
+      )
+      if (!existing) return createDefaultPublishedTemplate()
+      return existing
+    }
     const existing = get().publishedTemplates.find(
       (entry) => entry.id === template.id,
     )
@@ -156,6 +172,13 @@ export const useTemplateLibraryStore = create<TemplateLibraryStore>((set, get) =
 
   publishBuilderTemplate: (template) => {
     get().ensureInitialized()
+    if (isDefaultPublishedTemplate(template.id)) {
+      const existing = get().publishedTemplates.find(
+        (entry) => entry.id === template.id,
+      )
+      if (!existing) return createDefaultPublishedTemplate()
+      return existing
+    }
     const existing = get().publishedTemplates.find(
       (entry) => entry.id === template.id,
     )
@@ -231,6 +254,16 @@ export const useTemplateLibraryStore = create<TemplateLibraryStore>((set, get) =
 
   getPublishedTemplate: (id) =>
     get().publishedTemplates.find((entry) => entry.id === id),
+
+  deletePublishedTemplate: (id) => {
+    if (isDefaultPublishedTemplate(id)) return false
+    const hadEntry = get().publishedTemplates.some((entry) => entry.id === id)
+    if (!hadEntry) return false
+    set((s) => ({
+      publishedTemplates: s.publishedTemplates.filter((entry) => entry.id !== id),
+    }))
+    return true
+  },
 }))
 
 export function isDimmedGeneratedTemplate(

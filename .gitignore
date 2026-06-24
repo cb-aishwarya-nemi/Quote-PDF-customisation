@@ -1,4 +1,5 @@
 node_modules
 dist
 .tmp-pdf-lib
+public/pdfjs
 *.local

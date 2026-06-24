@@ -4,9 +4,11 @@ import {
   applyCreationContextToTemplate,
   type CreationContext,
 } from "@/lib/derive-template-from-creation"
+import { isDefaultPublishedTemplate } from "@/lib/seed-demo-library"
 import {
   buildGenerationStepLabels,
 } from "@/lib/template-generation-steps"
+import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import type { BuilderTemplate } from "@/types/prompt-builder"
 
@@ -37,10 +39,13 @@ export function navigateToPromptBuilder(
     template?: BuilderTemplate
     creationBrief?: string
     uploadedFileNames?: string[]
+    extractionSummary?: PdfExtractionSummary
+    generationStepLabels?: string[]
   },
   templateId?: string,
 ) {
   const id = templateId ?? options?.template?.id ?? createId("tpl")
+  if (isDefaultPublishedTemplate(id)) return
   const creationContext: CreationContext = {
     creationBrief: options?.creationBrief,
     uploadedFileNames: options?.uploadedFileNames,
@@ -54,13 +59,15 @@ export function navigateToPromptBuilder(
     })
   const template = applyCreationContextToTemplate(baseTemplate, creationContext)
   const generationStepLabels =
-    options?.hasUploads !== undefined
+    options?.generationStepLabels ??
+    (options?.hasUploads !== undefined
       ? buildGenerationStepLabels(options.hasUploads)
-      : undefined
+      : undefined)
 
   usePromptBuilderStore.getState().initTemplate(template, {
     generationStepLabels,
     creationBrief: options?.creationBrief,
+    extractionSummary: options?.extractionSummary,
   })
   navigate(promptBuilderPath(id), {
     state: {

@@ -35,7 +35,10 @@ export function canAddBesideBlock(
 ): boolean {
   if (blockRequiresFullWidth(block.type)) return false
   if (getLayoutColumn(block.content) === "right") return false
-  if (block.type === "company_address") return false
+
+  if (block.type === "company_logo" && nextBlock?.type === "company_address") {
+    return false
+  }
 
   if (nextBlock && blocksAreActivePair(block, nextBlock)) {
     return false
@@ -44,24 +47,43 @@ export function canAddBesideBlock(
   return blockAllowsHalfWidth(block.type)
 }
 
-/** Standalone half blocks keep their column; orphan right slots become left rows. */
+/** Standalone half blocks keep their column; orphan right slots without a pair reset width. */
 export function reconcileOrphanHalfColumns(blocks: BuilderBlock[]): BuilderBlock[] {
   return blocks.map((block, index) => {
-    if (getLayoutColumn(block.content) !== "right") return block
+    const column = getLayoutColumn(block.content)
 
-    const prev = blocks[index - 1]
-    if (prev && blocksAreActivePair(prev, block)) return block
-
-    if (block.type === "company_address" || !blockRequiresHalfWidth(block.type)) {
-      return setBlockLayoutColumn(block, "left")
+    if (column === "right") {
+      const prev = blocks[index - 1]
+      if (prev && blocksAreActivePair(prev, block)) return block
+      if (blockRequiresHalfWidth(block.type)) {
+        return setBlockLayoutColumn(block, "left")
+      }
+      return setBlockLayoutColumn(block, "full")
     }
 
     return block
   })
 }
 
+/** Logo + address default to left column; snap address to right when it follows logo. */
+function reconcileStationeryPairs(blocks: BuilderBlock[]): BuilderBlock[] {
+  return blocks.map((block, index) => {
+    const prev = blocks[index - 1]
+    if (
+      block.type === "company_address" &&
+      prev?.type === "company_logo" &&
+      getLayoutColumn(prev.content) === "left"
+    ) {
+      return setBlockLayoutColumn(block, "right")
+    }
+    return block
+  })
+}
+
 export function enforceBlockLayoutRules(blocks: BuilderBlock[]): BuilderBlock[] {
-  return normalizeBlockLayout(reconcileOrphanHalfColumns(blocks))
+  return normalizeBlockLayout(
+    reconcileOrphanHalfColumns(reconcileStationeryPairs(blocks)),
+  )
 }
 
 export function normalizeBlockLayout(blocks: BuilderBlock[]): BuilderBlock[] {
@@ -207,4 +229,36 @@ export function filterTypesForBesideAdd(
   types: BuilderBlockType[],
 ): BuilderBlockType[] {
   return types.filter((type) => canBlocksFormPair(leftBlock, type))
+}
+
+/** Remove a block and expand any surviving half_or_full pair partner to full width. */
+export function removeBlockFromLayout(
+  blocks: BuilderBlock[],
+  blockId: string,
+): BuilderBlock[] {
+  const index = blocks.findIndex((block) => block.id === blockId)
+  if (index < 0) return blocks
+
+  const removed = blocks[index]
+  const prev = blocks[index - 1]
+  const next = blocks[index + 1]
+  let nextBlocks = [...blocks]
+
+  if (
+    prev &&
+    blocksAreActivePair(prev, removed) &&
+    !blockRequiresHalfWidth(prev.type)
+  ) {
+    nextBlocks[index - 1] = setBlockLayoutColumn(prev, "full")
+  }
+
+  if (
+    next &&
+    blocksAreActivePair(removed, next) &&
+    !blockRequiresHalfWidth(next.type)
+  ) {
+    nextBlocks[index + 1] = setBlockLayoutColumn(next, "full")
+  }
+
+  return nextBlocks.filter((block) => block.id !== blockId)
 }

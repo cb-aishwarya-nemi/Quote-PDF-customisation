@@ -82,6 +82,12 @@ function deriveNameFromFileName(fileName: string): string {
   return ensureQuoteSuffix(titled)
 }
 
+export function deriveTemplateNameFromFiles(files: { name: string }[]): string {
+  const fileName = files.find((file) => file.name.trim().length > 0)?.name
+  if (fileName) return deriveNameFromFileName(fileName)
+  return DEFAULT_QUOTE_TEMPLATE_NAME
+}
+
 export function deriveTemplateName(context: CreationContext): string {
   const brief = context.creationBrief?.trim()
   if (brief) return deriveNameFromBrief(brief)

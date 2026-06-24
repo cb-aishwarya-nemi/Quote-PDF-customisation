@@ -1,5 +1,7 @@
 import { mockBusinessProfile } from "@/mock/data"
-import type { ChatMessage } from "@/types/prompt-builder"
+import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
+import { BLOCK_TYPE_LABELS } from "@/lib/derive-template-variables"
+import type { BuilderBlockType, ChatMessage } from "@/types/prompt-builder"
 
 export function getGenerationBusinessType(): string {
   return (
@@ -22,6 +24,18 @@ export function buildGenerationStepLabels(
 }
 
 function pastTenseGenerationStep(label: string): string {
+  if (label === "Reading uploaded PDF") {
+    return "Read the uploaded PDF"
+  }
+  if (label === "Extracting text and section markers") {
+    return "Extracted text and section markers"
+  }
+  if (label === "Mapping sections to template blocks") {
+    return "Mapped sections to template blocks"
+  }
+  if (label === "Applying layout rules") {
+    return "Applied layout rules"
+  }
   if (label === "Reading files you uploaded") {
     return "Read the files you uploaded"
   }
@@ -38,6 +52,38 @@ function pastTenseGenerationStep(label: string): string {
     return "Drafted your template"
   }
   return label
+}
+
+export function makeExtractionSummaryMessage(
+  stepLabels: string[],
+  summary: PdfExtractionSummary,
+): ChatMessage {
+  const steps = stepLabels
+    .map((step) => `✓ ${pastTenseGenerationStep(step)}`)
+    .join("\n")
+
+  const sectionLabels = summary.detectedSections
+    .map((type) => BLOCK_TYPE_LABELS[type as BuilderBlockType] ?? type)
+    .join(", ")
+
+  const filledLabels = summary.filledBlocks
+    .map((type) => BLOCK_TYPE_LABELS[type as BuilderBlockType] ?? type)
+    .join(", ")
+
+  const detailLines = [
+    `Source: **${summary.sourceFileName}** (${summary.pageCount} page${summary.pageCount === 1 ? "" : "s"})`,
+    sectionLabels
+      ? `Detected sections: ${sectionLabels}`
+      : "No clear section markers — applied the standard block layout.",
+    filledLabels ? `Pre-filled from PDF: ${filledLabels}` : null,
+  ].filter(Boolean)
+
+  return {
+    id: "generation-summary",
+    role: "assistant",
+    content: `I've extracted a quote template from your PDF. Here's what I did:\n\n${steps}\n\n${detailLines.join("\n")}\n\nReview each block in the studio — extracted copy is a starting point and may need light edits.`,
+    timestamp: new Date().toISOString(),
+  }
 }
 
 export function makeGenerationSummaryMessage(

@@ -91,6 +91,16 @@ export function formatTemplateEditedAt(iso: string): string {
     return rtf.format(diffDays, "day")
   }
 
+  const diffMonths = Math.round(diffDays / 30)
+  if (Math.abs(diffMonths) < 12) {
+    return rtf.format(diffMonths, "month")
+  }
+
+  const diffYears = Math.round(diffMonths / 12)
+  if (Math.abs(diffYears) < 2) {
+    return rtf.format(diffYears, "year")
+  }
+
   return edited.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",

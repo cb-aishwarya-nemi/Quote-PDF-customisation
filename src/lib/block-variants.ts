@@ -11,17 +11,17 @@ export const BLOCK_VARIANTS: Record<BuilderBlockType, BlockVariantOption[]> = {
     {
       id: "default",
       label: "Default",
-      description: "Standard logo size",
+      description: "40px logo height",
     },
     {
       id: "wide",
       label: "Wide",
-      description: "Wider logo area for horizontal marks",
+      description: "72px × 320px for horizontal marks",
     },
     {
       id: "compact",
       label: "Compact",
-      description: "Smaller logo mark",
+      description: "28px icon size",
     },
   ],
   company_address: [
@@ -288,11 +288,11 @@ export const LOGO_VARIANTS: BlockVariantOption[] = [
     label: "Default",
     description: "Standard logo size",
   },
-  {
-    id: "wide",
-    label: "Wide",
-    description: "Wider logo area for horizontal marks",
-  },
+    {
+      id: "wide",
+      label: "Wide",
+      description: "Large horizontal logo for brand-forward quotes",
+    },
   {
     id: "compact",
     label: "Compact",
