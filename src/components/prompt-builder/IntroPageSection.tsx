@@ -5,7 +5,7 @@ type Props = {
   onInsertHover: (active: boolean) => void
 }
 
-/** Hover affordance to add an intro page above the quote canvas. */
+/** Hover affordance to add a blank blocks page above the quote canvas. */
 export function IntroPageSection({ showAddDivider, onInsertHover }: Props) {
   return (
     <AddIntroPageDivider

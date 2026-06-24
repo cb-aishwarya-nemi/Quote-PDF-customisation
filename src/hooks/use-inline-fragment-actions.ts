@@ -4,7 +4,7 @@ import {
   INLINE_FRAGMENTS_KEY,
   resolveInlineFragments,
 } from "@/lib/content-fragments"
-import { getBlockFieldDefs, getVariableCatalog, getVariableDummyValue } from "@/lib/derive-template-variables"
+import { getBlockFieldDefs, getVariableCatalog, getVariableDummyValue, normalizeVariableKey } from "@/lib/derive-template-variables"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import type { BuilderBlock, InlineFragment } from "@/types/prompt-builder"
 import { useMemo } from "react"
@@ -58,6 +58,7 @@ export function useInlineFragmentActions(block: BuilderBlock) {
   }
 
   const addVariable = (variableKey: string, label: string) => {
+    const normalizedKey = normalizeVariableKey(variableKey)
     const existingFields = new Set(
       fragments
         .filter(
@@ -66,15 +67,15 @@ export function useInlineFragmentActions(block: BuilderBlock) {
         )
         .map((f) => f.field),
     )
-    const fragment = createVariableFragment(variableKey, label, existingFields)
+    const fragment = createVariableFragment(normalizedKey, label, existingFields)
     const existingValue = block.content[fragment.field]
     if (existingValue == null || String(existingValue).trim() === "") {
-      updateBlockField(block.id, fragment.field, getVariableDummyValue(variableKey))
+      updateBlockField(block.id, fragment.field, getVariableDummyValue(normalizedKey))
     }
     const keys = {
       ...((block.content.variableKeys as Record<string, string> | undefined) ??
         {}),
-      [fragment.field]: variableKey,
+      [fragment.field]: normalizedKey,
     }
     updateBlockField(block.id, "variableKeys", keys)
     persistFragments([...fragments, fragment])

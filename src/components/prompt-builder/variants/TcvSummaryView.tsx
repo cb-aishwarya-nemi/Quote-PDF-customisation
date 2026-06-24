@@ -67,7 +67,7 @@ export function TcvSummaryView({ block, onField }: Props) {
       <div
         className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${emphasisClass}`}
       >
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <div className="flex shrink-0 flex-nowrap items-baseline gap-x-2">
           <EditableLabel
             blockId={block.id}
             value={inlineLabel}
@@ -96,13 +96,13 @@ export function TcvSummaryView({ block, onField }: Props) {
 
         <div className="hidden h-5 w-px shrink-0 bg-gray-200 sm:block" aria-hidden />
 
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex shrink-0 flex-nowrap items-center gap-x-4">
           {METRICS.map(([key, labelKey, fallback], index) => (
-            <div key={key} className="flex items-center gap-x-4">
+            <div key={key} className="flex shrink-0 items-center gap-x-4">
               {index > 0 && (
                 <div className="hidden h-5 w-px shrink-0 bg-gray-200 sm:block" aria-hidden />
               )}
-              <div className="flex min-w-0 items-baseline gap-1.5">
+              <div className="flex shrink-0 items-baseline gap-1.5 whitespace-nowrap">
                 <EditableLabel
                   blockId={block.id}
                   value={staticLabel(c, labelKey, fallback)}
@@ -136,7 +136,7 @@ export function TcvSummaryView({ block, onField }: Props) {
             onChange={(v) => onField("label", v)}
             className="text-[10px] font-semibold uppercase tracking-widest text-teal-200/70"
           />
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <div className="mt-2 flex flex-nowrap items-baseline gap-x-3">
             <VariableField
               blockId={block.id}
               blockType="tcv_summary"
@@ -190,7 +190,7 @@ export function TcvSummaryView({ block, onField }: Props) {
               value={sectionLabel}
               onChange={(v) => onField("label", v)}
             />
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <div className="mt-2 flex flex-nowrap items-baseline gap-x-3">
               <VariableField
                 blockId={block.id}
                 blockType="tcv_summary"

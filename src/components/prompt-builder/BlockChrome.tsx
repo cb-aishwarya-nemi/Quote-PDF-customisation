@@ -13,13 +13,12 @@ import { isBlockLocked } from "@/lib/block-lock"
 import {
   describeConditionRulesShort,
   hasConditions,
-  normalizeConditionRules,
 } from "@/lib/segment-conditions"
 import { BLOCK_VARIANTS, getVariantLabel } from "@/lib/block-variants"
 import { hasBlockBackground } from "@/lib/block-background"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import type { BlockDisplayCondition, BuilderBlock } from "@/types/prompt-builder"
-import { Filter, GripVertical, LayoutGrid, Lock, Trash2, TriangleAlert, Unlock, X } from "lucide-react"
+import { Filter, GripVertical, LayoutGrid, Lock, Trash2, TriangleAlert, Unlock } from "lucide-react"
 import { useEffect, useRef, useState, type ReactNode, type HTMLAttributes } from "react"
 
 type Props = {
@@ -250,10 +249,10 @@ export function BlockChrome({
               {conditionOpen && (
                 <div className="pointer-events-auto absolute right-0 top-full z-30 mt-1">
                   <ConditionBuilderPanel
-                    title="Show block when"
-                    rules={normalizeConditionRules(displayCondition)}
-                    onChange={(rules) => {
-                      setBlockDisplayCondition(block.id, rules)
+                    title="Show block"
+                    rules={displayCondition}
+                    onChange={(condition) => {
+                      setBlockDisplayCondition(block.id, condition)
                     }}
                   />
                 </div>
@@ -316,38 +315,8 @@ export function BlockChrome({
           </div>
         )}
 
-        {!isLocked && hasCondition && (
-          <div
-            className={`flex items-center gap-1 border-b border-amber-100/90 bg-amber-50/35 px-3 py-0.5 ${
-              hasLayoutHint ? "" : "rounded-t-xl"
-            }`}
-          >
-            <Filter className="size-2.5 shrink-0 text-amber-500/80" strokeWidth={2} />
-            <span className="min-w-0 flex-1 truncate text-[9px] leading-tight text-amber-800/85">
-              Shows when {conditionSummary}
-            </span>
-            {isTemplateEdit && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setBlockDisplayCondition(block.id, null)
-                }}
-                className="shrink-0 rounded p-0.5 text-amber-500/70 opacity-0 transition-opacity hover:bg-amber-100/60 hover:text-amber-700 group-hover/block:opacity-100"
-                aria-label="Remove condition"
-              >
-                <X className="size-2.5" />
-              </button>
-            )}
-          </div>
-        )}
-
         {hasLayoutHint && (
-          <div
-            className={`flex items-start gap-1.5 border-b border-amber-200 bg-amber-50 px-3 py-1.5 ${
-              !isLocked && hasCondition ? "" : "rounded-t-xl"
-            }`}
-          >
+          <div className="flex items-start gap-1.5 rounded-t-xl border-b border-amber-200 bg-amber-50 px-3 py-1.5">
             <TriangleAlert className="mt-px size-3 shrink-0 text-amber-600" />
             <div className="min-w-0 space-y-0.5">
               {layoutHints.map((hint) => (

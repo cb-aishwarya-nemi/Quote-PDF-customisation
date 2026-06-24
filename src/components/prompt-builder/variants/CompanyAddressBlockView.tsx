@@ -17,7 +17,7 @@ export function CompanyAddressBlockView({ block, onField }: Props) {
 
   if (variant === "compact") {
     return (
-      <div className="text-[12px] text-gray-700">
+      <div className="text-[12px] whitespace-nowrap text-gray-700">
         <VariableField
           blockId={block.id}
           blockType="company_address"
@@ -64,7 +64,6 @@ export function CompanyAddressBlockView({ block, onField }: Props) {
         value={String(c.address ?? "")}
         onChange={(v) => onField("address", v)}
         multiline
-        hugContents
         className="mt-1 text-[12px] leading-relaxed text-gray-600"
       />
       <div className="mt-2 space-y-0.5 text-[11px] text-gray-500">

@@ -296,38 +296,24 @@ export function VariantPreviewThumb({ blockType, variantId, selected }: Props) {
   }
 
   if (blockType === "terms") {
-    if (variantId === "numbered") {
+    if (variantId === "table") {
       return (
-        <div className={`${shell} gap-1`}>
-          {[1, 2].map((n) => (
-            <div key={n} className="flex items-start gap-0.5">
-              <div className={`flex size-2 shrink-0 items-center justify-center rounded-full text-[6px] font-bold text-white ${accent}`}>
-                {n}
-              </div>
-              <Bar w="w-full" className={faint} />
-            </div>
-          ))}
-        </div>
-      )
-    }
-    if (variantId === "legal") {
-      return (
-        <div className={`${shell} gap-px`}>
-          <Bar h="h-px" className={faint} />
-          <Bar h="h-px" className={faint} />
-          <Bar h="h-px" className={faint} />
-          <Bar h="h-px" w="w-4/5" className={faint} />
+        <div className={`${shell} gap-0.5 p-0.5`}>
+          <div className={`grid grid-cols-2 gap-0.5 border-b ${selected ? "border-cb-orange/30" : "border-gray-200"}`}>
+            <Bar className={mid} />
+            <Bar className={mid} />
+          </div>
+          <Bar className={faint} />
+          <Bar className={faint} />
         </div>
       )
     }
     return (
-      <div className={`${shell} gap-0.5`}>
-        <div className={`rounded-sm border p-0.5 ${selected ? "border-cb-orange/30" : "border-gray-200"}`}>
-          <Bar className={faint} />
-        </div>
-        <div className={`rounded-sm border p-0.5 ${selected ? "border-cb-orange/30" : "border-gray-200"}`}>
-          <Bar className={faint} />
-        </div>
+      <div className={`${shell} gap-px`}>
+        <Bar h="h-px" className={faint} />
+        <Bar h="h-px" className={faint} />
+        <Bar h="h-px" className={faint} />
+        <Bar h="h-px" w="w-4/5" className={faint} />
       </div>
     )
   }

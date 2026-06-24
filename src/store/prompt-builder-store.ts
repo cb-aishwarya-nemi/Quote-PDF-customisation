@@ -1,10 +1,12 @@
 import { createId } from "@/lib/create-id"
 import { flushBuilderAutosave } from "@/lib/builder-autosave"
+import { normalizeDocumentFooter } from "@/lib/document-footer"
 import {
   INLINE_FRAGMENTS_KEY,
   resolveInlineFragments,
 } from "@/lib/content-fragments"
 import {
+  createBlankBlocksPage,
   normalizeTemplatePages,
   normalizeTemplatePageOrder,
   QUOTE_PAGE_ID,
@@ -30,6 +32,7 @@ import {
 } from "@/lib/pdf-page-render"
 import {
   createConditionRule,
+  hasConditions,
   segmentHasConditionValue,
 } from "@/lib/segment-conditions"
 import { createStandaloneBuilderBlock, normalizeBuilderBlocks } from "@/lib/create-builder-template"
@@ -38,6 +41,8 @@ import {
   findBlockIndex,
   moveBlockAfterType,
   moveBlockBeforeType,
+  moveSignatureToClosingPosition,
+  resolveDefaultAddBlockIndex,
 } from "@/lib/block-layout-helpers"
 import {
   blocksAreActivePair,
@@ -59,6 +64,9 @@ import {
   makeExtractionSummaryMessage,
   makeGenerationSummaryMessage,
 } from "@/lib/template-generation-steps"
+import {
+  applyTermsVariantToSegments,
+} from "@/lib/terms-segments"
 import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
 import {
   applyAgentDemoChanges,
@@ -75,6 +83,7 @@ import type {
   BuilderTemplate,
   ChatMessage,
   ConditionalSegment,
+  DocumentFooterConfig,
   PreviewScenario,
 } from "@/types/prompt-builder"
 import { PREVIEW_SCENARIOS } from "@/types/prompt-builder"
@@ -248,14 +257,37 @@ function tryLayoutFixReply(
   }
 
   if (
+    (lower.includes("signature") || lower.includes("sign-off")) &&
+    lower.includes("before") &&
+    lower.includes("ae")
+  ) {
+    return apply(
+      moveBlockBeforeType(template.blocks, "signature", "ae_profile"),
+      "Moved the signature block before AE details.",
+      "signature",
+    )
+  }
+
+  if (
     (lower.includes("ae profile") || lower.includes("ae")) &&
     lower.includes("after") &&
     lower.includes("signature")
   ) {
     return apply(
       moveBlockAfterType(template.blocks, "ae_profile", "signature"),
-      "Moved the AE profile after the signature block.",
+      "Moved AE details after the signature block.",
       "ae_profile",
+    )
+  }
+
+  if (
+    (lower.includes("signature") || lower.includes("sign-off")) &&
+    (lower.includes("end") || lower.includes("last") || lower.includes("move"))
+  ) {
+    return apply(
+      moveSignatureToClosingPosition(template.blocks),
+      "Moved the signature block to the closing section before AE details.",
+      "signature",
     )
   }
 
@@ -271,6 +303,7 @@ type PromptBuilderStore = {
   messages: ChatMessage[]
   isAgentTyping: boolean
   ignoredValidationIssueIds: string[]
+  conditionStripHighlighted: boolean
   /** PDF picked during add-block flow — opens page picker on the new block */
   pendingImagePdfImport: {
     blockId: string
@@ -303,7 +336,10 @@ type PromptBuilderStore = {
   closeSalesEdit: () => void
   setTemplateName: (name: string) => void
   setTemplateDisplayCondition: (condition: BlockDisplayCondition) => void
-  addPage: () => void
+  highlightConditionStrip: () => void
+  clearConditionStripHighlight: () => void
+  setDocumentFooter: (patch: Partial<DocumentFooterConfig>) => void
+  addPage: (anchorPageId?: string, position?: "after" | "before") => void
   addIntroPage: () => void
   updatePage: (pageId: string, content: Record<string, unknown>) => void
   updateIntroPage: (content: Record<string, unknown>) => void
@@ -323,7 +359,7 @@ type PromptBuilderStore = {
   ) => void
   addBlock: (type: BuilderBlockType, afterId?: string, pageId?: string) => void
   addBlockBeside: (blockId: string, type: BuilderBlockType, pageId?: string) => void
-  addImageBlockFromFile: (file: File, afterId?: string) => void
+  addImageBlockFromFile: (file: File, afterId?: string, pageId?: string) => void
   addImageBlockFromFileBeside: (file: File, blockId: string) => void
   clearPendingImagePdfImport: () => void
   setPendingIntroPdfImport: (payload: {
@@ -471,15 +507,20 @@ function agentReply(
       label: "pricing table",
     },
     {
-      match: (s) => s.includes("numbered") && s.includes("terms"),
+      match: (s) => s.includes("table") && s.includes("terms"),
       type: "terms",
-      variantId: "numbered",
+      variantId: "table",
       label: "terms",
     },
     {
-      match: (s) => s.includes("legal dense") || (s.includes("legal") && s.includes("terms")),
+      match: (s) =>
+        (s.includes("legal dense") ||
+          s.includes("content dense") ||
+          (s.includes("legal") && s.includes("terms"))) &&
+        !s.includes("numbered") &&
+        !s.includes("table"),
       type: "terms",
-      variantId: "legal",
+      variantId: "dense",
       label: "terms",
     },
     {
@@ -781,17 +822,20 @@ function agentReply(
       if (sig) {
         set((s) => {
           if (!s.template) return s
-          const blocks = s.template.blocks.filter((b) => b.id !== sig.id)
-          blocks.push(sig)
+          const nextBlocks = moveSignatureToClosingPosition(s.template.blocks)
+          if (!nextBlocks) return s
           return {
             template: {
               ...s.template,
-              blocks: blocks.map((b, i) => ({ ...b, order: i })),
+              blocks: nextBlocks.map((b, i) => ({ ...b, order: i })),
             },
             selectedBlockId: sig.id,
           }
         })
-        return "Moved the signature block to the end of the template."
+        const hasAe = template.blocks.some((b) => b.type === "ae_profile")
+        return hasAe
+          ? "Moved the signature block before AE details."
+          : "Moved the signature block to the end of the template."
       }
     }
     return "A signature block is already on the canvas."
@@ -849,6 +893,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   messages: [],
   isAgentTyping: false,
   ignoredValidationIssueIds: [],
+  conditionStripHighlighted: false,
   pendingImagePdfImport: null,
   pendingIntroPdfImport: null,
   activePageId: QUOTE_PAGE_ID,
@@ -915,6 +960,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       pendingImagePdfImport: null,
       pendingIntroPdfImport: null,
       ignoredValidationIssueIds: [],
+      conditionStripHighlighted: false,
       activePageId: QUOTE_PAGE_ID,
     })
   },
@@ -936,13 +982,37 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
     ),
 
   setTemplateDisplayCondition: (condition) =>
+    set((s) => {
+      if (!s.template) return s
+      const next = {
+        template: { ...s.template, displayCondition: condition },
+      }
+      if (hasConditions(condition)) {
+        return { ...next, conditionStripHighlighted: false }
+      }
+      return next
+    }),
+
+  highlightConditionStrip: () => set({ conditionStripHighlighted: true }),
+
+  clearConditionStripHighlight: () => set({ conditionStripHighlighted: false }),
+
+  setDocumentFooter: (patch) =>
     set((s) =>
       s.template
-        ? { template: { ...s.template, displayCondition: condition } }
+        ? {
+            template: {
+              ...s.template,
+              documentFooter: normalizeDocumentFooter({
+                ...s.template.documentFooter,
+                ...patch,
+              }),
+            },
+          }
         : s,
     ),
 
-  addPage: () =>
+  addPage: (anchorPageId, position = "after") =>
     set((s) => {
       if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) {
         return s
@@ -950,38 +1020,54 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
       const template = normalizeTemplatePages(s.template)
       const customPages = resolveCustomPages(template)
-      const pageId = createId("page")
-      const label = customPages.length === 0 ? "Cover" : `Page ${customPages.length + 1}`
       const order = normalizeTemplatePageOrder(template)
+      const anchorIndex =
+        anchorPageId != null ? order.indexOf(anchorPageId) : -1
       const quoteIndex = order.indexOf(QUOTE_PAGE_ID)
-      const nextOrder =
-        quoteIndex >= 0
-          ? [...order.slice(0, quoteIndex), pageId, ...order.slice(quoteIndex)]
-          : [...order, pageId]
+      const insertIndex =
+        anchorIndex >= 0
+          ? position === "before"
+            ? anchorIndex
+            : anchorIndex + 1
+          : quoteIndex >= 0
+            ? quoteIndex
+            : order.length
+
+      if (customPages.length === 0) {
+        const page = createBlankBlocksPage(1)
+        const nextOrder = [
+          ...order.slice(0, insertIndex),
+          page.id,
+          ...order.slice(insertIndex),
+        ]
+
+        return {
+          template: {
+            ...template,
+            customPages: [page],
+            pageOrder: nextOrder,
+            introPage: undefined,
+          },
+          activePageId: page.id,
+          selectedBlockId: null,
+        }
+      }
+
+      const page = createBlankBlocksPage(customPages.length + 1)
+      const nextOrder = [
+        ...order.slice(0, insertIndex),
+        page.id,
+        ...order.slice(insertIndex),
+      ]
 
       return {
         template: {
           ...template,
-          customPages: [
-            ...customPages,
-            customPages.length === 0
-              ? {
-                  id: pageId,
-                  label,
-                  kind: "intro" as const,
-                  content: { placeholder: true, alt: label },
-                }
-              : {
-                  id: pageId,
-                  label,
-                  kind: "blocks" as const,
-                  blocks: [],
-                },
-          ],
+          customPages: [...customPages, page],
           pageOrder: nextOrder,
           introPage: undefined,
         },
-        activePageId: pageId,
+        activePageId: page.id,
         selectedBlockId: null,
       }
     }),
@@ -1235,7 +1321,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
         const idx = blocks.findIndex((b) => b.id === afterId)
         blocks.splice(idx + 1, 0, newBlock)
       } else {
-        blocks.push(newBlock)
+        blocks.splice(resolveDefaultAddBlockIndex(blocks, type), 0, newBlock)
       }
       return {
         template: setBlocksForPage(s.template, targetPageId, normalizePageBlocks(blocks)),
@@ -1280,8 +1366,8 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       }
     }),
 
-  addImageBlockFromFile: (file, afterId) => {
-    get().addBlock("custom_image", afterId)
+  addImageBlockFromFile: (file, afterId, pageId) => {
+    get().addBlock("custom_image", afterId, pageId)
     const blockId = get().selectedBlockId
     if (!blockId) return
 
@@ -1428,12 +1514,18 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       const nextBlocks = applyBlockDrop(currentBlocks, blockId, target)
       if (nextBlocks === currentBlocks) return s
 
+      const normalized = normalizePageBlocks(nextBlocks)
+      const pageChanged =
+        normalized.length !== currentBlocks.length ||
+        normalized.some(
+          (block, index) =>
+            block.id !== currentBlocks[index]?.id ||
+            block.content.layoutColumn !== currentBlocks[index]?.content.layoutColumn,
+        )
+      if (!pageChanged) return s
+
       return {
-        template: setBlocksForPage(
-          s.template,
-          targetPageId,
-          normalizePageBlocks(nextBlocks),
-        ),
+        template: setBlocksForPage(s.template, targetPageId, normalized),
       }
     }),
 
@@ -1465,10 +1557,18 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   setBlockVariant: (blockId, variant) => {
     if (get().editorMode !== "edit") return
-    get().updateBlockField(blockId, "variant", variant)
     const block = findTemplateBlock(get().template, blockId)
+    get().updateBlockField(blockId, "variant", variant)
     if (block?.type === "company_logo") {
       get().updateBlockField(blockId, "logoVariant", variant)
+    }
+    if (block?.type === "terms") {
+      const segments = (block.content.segments as ConditionalSegment[]) ?? []
+      get().updateBlockField(
+        blockId,
+        "segments",
+        applyTermsVariantToSegments(segments, variant),
+      )
     }
   },
 

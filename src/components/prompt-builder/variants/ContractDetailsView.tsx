@@ -70,7 +70,7 @@ export function ContractDetailsView({ block, onField }: Props) {
         {FIELDS.map((key) => (
           <div
             key={key}
-            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 py-2"
+            className="flex flex-nowrap items-baseline justify-between gap-x-4 px-3 py-2"
           >
             <dt>
               <EditableLabel
@@ -80,7 +80,7 @@ export function ContractDetailsView({ block, onField }: Props) {
                 className="text-gray-500"
               />
             </dt>
-            <dd className="min-w-[8rem] flex-1 text-right">
+            <dd className="shrink-0 text-right">
               <VariableField blockId={block.id}
                 blockType="contract_details"
                 field={key}

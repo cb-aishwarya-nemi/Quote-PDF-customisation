@@ -75,7 +75,7 @@ export function CreateQuoteTemplateModal({
             </span>
 
             <h2 className="mt-3 text-[20px] font-semibold leading-snug text-gray-900">
-              Let's build your first template
+              Let's build your quote pdf template
             </h2>
             <p className="mt-1.5 max-w-lg text-[13px] leading-relaxed text-gray-500">
               Built from proven quote patterns and tailored to your business.
@@ -97,7 +97,7 @@ export function CreateQuoteTemplateModal({
             <div className="mt-6 border-t border-gray-100 pt-5">
               <div className="flex items-center gap-2">
                 <h3 className="text-[12px] font-medium text-gray-600">
-                  Add your assets
+                  Add documents
                 </h3>
                 <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
                   Optional
@@ -132,7 +132,7 @@ export function CreateQuoteTemplateModal({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] text-gray-900">
-                    Drop customer proposals, quote PDFs, order forms, brand guidelines
+                    Drop customer proposals, quote PDFs, order forms
                   </p>
                   <p className="mt-0.5 text-[11px] text-gray-500">
                     PDF, DOCX, PNG, JPG, SVG · up to 20 MB each

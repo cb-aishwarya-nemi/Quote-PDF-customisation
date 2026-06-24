@@ -4,6 +4,7 @@ import { VariableField } from "@/components/prompt-builder/VariableField"
 import { getPricingRowVariableDef } from "@/lib/derive-template-variables"
 import { DEFAULT_LABELS, staticLabel } from "@/lib/block-static-labels"
 import type { BuilderBlock } from "@/types/prompt-builder"
+import type { ReactNode } from "react"
 
 type Props = {
   block: BuilderBlock
@@ -32,24 +33,66 @@ function SubtotalRow({
   className?: string
 }) {
   return (
-    <div className={className}>
-      <span className="text-[13px] font-semibold text-gray-900">
-        <EditableLabel
-          blockId={block.id}
-          value={subtotalLabel}
-          onChange={(v) => onField("subtotalLabel", v)}
-        />{" "}
-        <VariableField
-          blockId={block.id}
-          blockType="pricing"
-          field="subtotal"
-          value={String(c.subtotal ?? "")}
-          onChange={(v) => onField("subtotal", v)}
-          layout="inline"
-          className="inline font-semibold"
-        />
-      </span>
-    </div>
+    <span
+      className={`inline-flex items-baseline gap-1.5 whitespace-nowrap text-[13px] font-semibold text-gray-900 ${className ?? ""}`}
+    >
+      <EditableLabel
+        blockId={block.id}
+        value={subtotalLabel}
+        onChange={(v) => onField("subtotalLabel", v)}
+      />
+      <VariableField
+        blockId={block.id}
+        blockType="pricing"
+        field="subtotal"
+        value={String(c.subtotal ?? "")}
+        onChange={(v) => onField("subtotal", v)}
+        layout="inline"
+        className="font-semibold"
+      />
+    </span>
+  )
+}
+
+function AmountCell({
+  children,
+  className = "",
+}: {
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <td className={`py-2 pr-2 text-right align-top font-medium text-gray-900 ${className}`}>
+      <div className="flex justify-end">{children}</div>
+    </td>
+  )
+}
+
+function PricingTableFoot({
+  block,
+  c,
+  subtotalLabel,
+  onField,
+}: {
+  block: BuilderBlock
+  c: Record<string, unknown>
+  subtotalLabel: string
+  onField: (field: string, value: unknown) => void
+}) {
+  return (
+    <tfoot>
+      <tr className="border-t-2 border-gray-200">
+        <td className="py-2 pl-2" />
+        <AmountCell className="py-2.5 font-semibold">
+          <SubtotalRow
+            block={block}
+            c={c}
+            subtotalLabel={subtotalLabel}
+            onField={onField}
+          />
+        </AmountCell>
+      </tr>
+    </tfoot>
   )
 }
 
@@ -111,13 +154,14 @@ export function PricingTableView({ block, onField }: Props) {
             </div>
           ))}
         </div>
-        <SubtotalRow
-          block={block}
-          c={c}
-          subtotalLabel={subtotalLabel}
-          onField={onField}
-          className="mt-4 flex justify-end border-t border-gray-200 pt-2"
-        />
+        <div className="mt-4 flex justify-end border-t border-gray-200 pt-2">
+          <SubtotalRow
+            block={block}
+            c={c}
+            subtotalLabel={subtotalLabel}
+            onField={onField}
+          />
+        </div>
       </div>
     )
   }
@@ -145,7 +189,7 @@ export function PricingTableView({ block, onField }: Props) {
                     onChange={(v) => updateRow(i, "item", v)}
                   />
                 </td>
-                <td className="py-1.5 pr-2 text-right align-top font-medium text-gray-900">
+                <AmountCell className="py-1.5">
                   <VariableField
                     blockId={block.id}
                     blockType="pricing"
@@ -153,20 +197,18 @@ export function PricingTableView({ block, onField }: Props) {
                     variableDef={getPricingRowVariableDef(i, "amount")}
                     value={row.amount}
                     onChange={(v) => updateRow(i, "amount", v)}
-                    className="text-right"
                   />
-                </td>
+                </AmountCell>
               </tr>
             ))}
           </tbody>
+          <PricingTableFoot
+            block={block}
+            c={c}
+            subtotalLabel={subtotalLabel}
+            onField={onField}
+          />
         </table>
-        <SubtotalRow
-          block={block}
-          c={c}
-          subtotalLabel={subtotalLabel}
-          onField={onField}
-          className="mt-2 flex justify-end bg-gray-100 px-2 py-1.5 text-[12px] font-semibold"
-        />
       </div>
     )
   }
@@ -190,13 +232,14 @@ export function PricingTableView({ block, onField }: Props) {
                   onChange={(v) => onField("itemColumnLabel", v)}
                 />
               </th>
-              <th className="py-2 pr-2 text-right font-semibold text-gray-600">
-                <EditableLabel
-                  blockId={block.id}
-                  value={amountCol}
-                  onChange={(v) => onField("amountColumnLabel", v)}
-                  className="inline-block w-full text-right"
-                />
+              <th className="py-2 pr-2 font-semibold text-gray-600">
+                <div className="flex justify-end">
+                  <EditableLabel
+                    blockId={block.id}
+                    value={amountCol}
+                    onChange={(v) => onField("amountColumnLabel", v)}
+                  />
+                </div>
               </th>
             </tr>
           </thead>
@@ -222,7 +265,7 @@ export function PricingTableView({ block, onField }: Props) {
                     className="mt-1 text-[11px] leading-relaxed text-gray-500"
                   />
                 </td>
-                <td className="py-3 pr-2 text-right align-top font-medium text-gray-900">
+                <AmountCell className="py-3">
                   <VariableField
                     blockId={block.id}
                     blockType="pricing"
@@ -230,20 +273,18 @@ export function PricingTableView({ block, onField }: Props) {
                     variableDef={getPricingRowVariableDef(i, "amount")}
                     value={row.amount}
                     onChange={(v) => updateRow(i, "amount", v)}
-                    className="text-right"
                   />
-                </td>
+                </AmountCell>
               </tr>
             ))}
           </tbody>
+          <PricingTableFoot
+            block={block}
+            c={c}
+            subtotalLabel={subtotalLabel}
+            onField={onField}
+          />
         </table>
-        <SubtotalRow
-          block={block}
-          c={c}
-          subtotalLabel={subtotalLabel}
-          onField={onField}
-          className="mt-2 flex justify-end"
-        />
       </div>
     )
   }
@@ -266,13 +307,14 @@ export function PricingTableView({ block, onField }: Props) {
                 onChange={(v) => onField("itemColumnLabel", v)}
               />
             </th>
-            <th className="py-2 pr-2 text-right font-semibold text-gray-600">
-              <EditableLabel
-                blockId={block.id}
-                value={amountCol}
-                onChange={(v) => onField("amountColumnLabel", v)}
-                className="inline-block w-full text-right"
-              />
+            <th className="py-2 pr-2 font-semibold text-gray-600">
+              <div className="flex justify-end">
+                <EditableLabel
+                  blockId={block.id}
+                  value={amountCol}
+                  onChange={(v) => onField("amountColumnLabel", v)}
+                />
+              </div>
             </th>
           </tr>
         </thead>
@@ -289,7 +331,7 @@ export function PricingTableView({ block, onField }: Props) {
                   onChange={(v) => updateRow(i, "item", v)}
                 />
               </td>
-              <td className="py-2 pr-2 text-right align-top font-medium text-gray-900">
+              <AmountCell>
                 <VariableField
                   blockId={block.id}
                   blockType="pricing"
@@ -297,20 +339,18 @@ export function PricingTableView({ block, onField }: Props) {
                   variableDef={getPricingRowVariableDef(i, "amount")}
                   value={row.amount}
                   onChange={(v) => updateRow(i, "amount", v)}
-                  className="text-right"
                 />
-              </td>
+              </AmountCell>
             </tr>
           ))}
         </tbody>
+        <PricingTableFoot
+          block={block}
+          c={c}
+          subtotalLabel={subtotalLabel}
+          onField={onField}
+        />
       </table>
-      <SubtotalRow
-        block={block}
-        c={c}
-        subtotalLabel={subtotalLabel}
-        onField={onField}
-        className="mt-2 flex justify-end"
-      />
     </div>
   )
 }

@@ -1,15 +1,21 @@
 import { CONDITION_FIELDS, getConditionField } from "@/lib/condition-fields"
 import {
   createConditionRule,
-  normalizeConditionRules,
+  parseConditionInput,
+  serializeConditionGroup,
 } from "@/lib/segment-conditions"
-import type { ConditionOperator, SegmentCondition } from "@/types/prompt-builder"
-import { Plus, Trash2 } from "lucide-react"
-import { forwardRef, type CSSProperties } from "react"
+import type {
+  BlockDisplayCondition,
+  ConditionMatchMode,
+  ConditionOperator,
+  SegmentCondition,
+} from "@/types/prompt-builder"
+import { ChevronDown, Plus, Trash2 } from "lucide-react"
+import { forwardRef, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 type Props = {
-  rules: SegmentCondition | SegmentCondition[] | null
-  onChange: (rules: SegmentCondition[] | null) => void
+  rules: BlockDisplayCondition
+  onChange: (rules: BlockDisplayCondition) => void
   title?: string
   className?: string
   style?: CSSProperties
@@ -20,11 +26,13 @@ function ConditionRuleRow({
   onChange,
   onRemove,
   canRemove,
+  prefix,
 }: {
   rule: SegmentCondition
   onChange: (patch: Partial<SegmentCondition>) => void
   onRemove: () => void
   canRemove: boolean
+  prefix: ReactNode
 }) {
   const fieldDef = getConditionField(rule.field) ?? CONDITION_FIELDS[0]
   const operators = fieldDef.operators
@@ -34,9 +42,13 @@ function ConditionRuleRow({
     !fieldDef.values.some((option) => option.value === rule.value)
 
   return (
-    <div className="flex items-start gap-1.5 rounded-md border border-gray-100 bg-gray-50/80 p-2">
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="grid grid-cols-[1.4fr_0.8fr_1.2fr] gap-1.5">
+    <div className="flex items-start gap-2">
+      <div className="flex w-10 shrink-0 items-center self-center">{prefix}</div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-1.5">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="grid grid-cols-[1.4fr_0.8fr_1.2fr] gap-1.5">
           <select
             value={rule.field}
             onClick={(e) => e.stopPropagation()}
@@ -135,22 +147,120 @@ function ConditionRuleRow({
               className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-800"
             />
           )}
-      </div>
+          </div>
 
-      {canRemove && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="mt-0.5 shrink-0 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-          aria-label="Remove condition"
+          {canRemove && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove()
+              }}
+              className="mt-0.5 shrink-0 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+              aria-label="Remove condition"
+            >
+              <Trash2 className="size-3" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LogicOperatorSelect({
+  value,
+  onChange,
+}: {
+  value: ConditionMatchMode
+  onChange: (value: ConditionMatchMode) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener("mousedown", onPointerDown)
+    return () => document.removeEventListener("mousedown", onPointerDown)
+  }, [open])
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen((current) => !current)
+        }}
+        className="inline-flex items-center gap-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:text-blue-700"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label="Condition match mode"
+      >
+        {value}
+        <ChevronDown className="size-3" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full z-10 mt-0.5 min-w-[72px] overflow-hidden rounded-md border border-gray-200 bg-white py-0.5 shadow-lg"
+          role="listbox"
         >
-          <Trash2 className="size-3" />
-        </button>
+          {(["and", "or"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="option"
+              aria-selected={value === option}
+              onClick={(e) => {
+                e.stopPropagation()
+                onChange(option)
+                setOpen(false)
+              }}
+              className={`block w-full px-3 py-1 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+                value === option
+                  ? "bg-blue-50 text-blue-600"
+                  : "text-blue-600 hover:bg-gray-50"
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
       )}
     </div>
+  )
+}
+
+function RulePrefix({
+  index,
+  match,
+  onMatchChange,
+}: {
+  index: number
+  match: ConditionMatchMode
+  onMatchChange: (value: ConditionMatchMode) => void
+}) {
+  if (index === 0) {
+    return (
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        WHEN
+      </span>
+    )
+  }
+
+  if (index === 1) {
+    return <LogicOperatorSelect value={match} onChange={onMatchChange} />
+  }
+
+  return (
+    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+      {match}
+    </span>
   )
 }
 
@@ -159,10 +269,13 @@ export const ConditionBuilderPanel = forwardRef<HTMLDivElement, Props>(
     { rules, onChange, title, className, style },
     ref,
   ) {
-  const normalized = normalizeConditionRules(rules)
+  const { match, rules: normalized } = parseConditionInput(rules)
 
-  const updateRules = (next: SegmentCondition[]) => {
-    onChange(next.length > 0 ? next : null)
+  const updateRules = (
+    next: SegmentCondition[],
+    nextMatch: ConditionMatchMode = match,
+  ) => {
+    onChange(serializeConditionGroup(nextMatch, next))
   }
 
   const updateRule = (index: number, patch: Partial<SegmentCondition>) => {
@@ -180,6 +293,10 @@ export const ConditionBuilderPanel = forwardRef<HTMLDivElement, Props>(
     updateRules([...normalized, createConditionRule()])
   }
 
+  const setMatch = (nextMatch: ConditionMatchMode) => {
+    updateRules(normalized, nextMatch)
+  }
+
   return (
     <div
       ref={ref}
@@ -189,7 +306,7 @@ export const ConditionBuilderPanel = forwardRef<HTMLDivElement, Props>(
       onMouseDown={(e) => e.stopPropagation()}
     >
       <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-        {title ?? "Show when"}
+        {title ?? "Show"}
       </p>
 
       {normalized.length === 0 ? (
@@ -199,19 +316,20 @@ export const ConditionBuilderPanel = forwardRef<HTMLDivElement, Props>(
       ) : (
         <div className="mt-2 space-y-2">
           {normalized.map((rule, index) => (
-            <div key={rule.id ?? `${rule.field}-${index}`}>
-              {index > 0 && (
-                <p className="mb-1 text-center text-[9px] font-semibold uppercase tracking-wider text-gray-400">
-                  AND
-                </p>
-              )}
-              <ConditionRuleRow
-                rule={rule}
-                onChange={(patch) => updateRule(index, patch)}
-                onRemove={() => removeRule(index)}
-                canRemove
-              />
-            </div>
+            <ConditionRuleRow
+              key={rule.id ?? `${rule.field}-${index}`}
+              rule={rule}
+              onChange={(patch) => updateRule(index, patch)}
+              onRemove={() => removeRule(index)}
+              canRemove
+              prefix={
+                <RulePrefix
+                  index={index}
+                  match={match}
+                  onMatchChange={setMatch}
+                />
+              }
+            />
           ))}
         </div>
       )}

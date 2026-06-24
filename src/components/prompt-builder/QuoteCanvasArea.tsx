@@ -264,7 +264,6 @@ export function QuoteCanvasArea() {
                       <PageBlockCanvas
                         template={template}
                         pageId={page.id}
-                        pageNumber={page.pageNumber}
                         isPreview={isPreview}
                         isSales={isSales}
                         onFrameClick={
@@ -273,7 +272,7 @@ export function QuoteCanvasArea() {
                       />
                     ) : (
                       <TemplateDocumentFrame
-                        pageNumber={page.pageNumber}
+                        pageId={page.id}
                         onClick={!isPreview ? (e) => e.stopPropagation() : undefined}
                       >
                         <CustomPageEditor pageId={page.id} />
@@ -312,7 +311,6 @@ export function QuoteCanvasArea() {
                   <PageBlockCanvas
                     template={template}
                     pageId={QUOTE_PAGE_ID}
-                    pageNumber={page.pageNumber}
                     isPreview={isPreview}
                     isSales={isSales}
                     exportRef={documentRef}

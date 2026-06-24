@@ -47,7 +47,7 @@ export function canAddBesideBlock(
   return blockAllowsHalfWidth(block.type)
 }
 
-/** Standalone half blocks keep their column; orphan right slots without a pair reset width. */
+/** Standalone half blocks keep their column; orphan right slots without a pair reset to left. */
 export function reconcileOrphanHalfColumns(blocks: BuilderBlock[]): BuilderBlock[] {
   return blocks.map((block, index) => {
     const column = getLayoutColumn(block.content)
@@ -55,7 +55,7 @@ export function reconcileOrphanHalfColumns(blocks: BuilderBlock[]): BuilderBlock
     if (column === "right") {
       const prev = blocks[index - 1]
       if (prev && blocksAreActivePair(prev, block)) return block
-      if (blockRequiresHalfWidth(block.type)) {
+      if (blockAllowsHalfWidth(block.type)) {
         return setBlockLayoutColumn(block, "left")
       }
       return setBlockLayoutColumn(block, "full")
@@ -65,25 +65,8 @@ export function reconcileOrphanHalfColumns(blocks: BuilderBlock[]): BuilderBlock
   })
 }
 
-/** Logo + address default to left column; snap address to right when it follows logo. */
-function reconcileStationeryPairs(blocks: BuilderBlock[]): BuilderBlock[] {
-  return blocks.map((block, index) => {
-    const prev = blocks[index - 1]
-    if (
-      block.type === "company_address" &&
-      prev?.type === "company_logo" &&
-      getLayoutColumn(prev.content) === "left"
-    ) {
-      return setBlockLayoutColumn(block, "right")
-    }
-    return block
-  })
-}
-
 export function enforceBlockLayoutRules(blocks: BuilderBlock[]): BuilderBlock[] {
-  return normalizeBlockLayout(
-    reconcileOrphanHalfColumns(reconcileStationeryPairs(blocks)),
-  )
+  return normalizeBlockLayout(reconcileOrphanHalfColumns(blocks))
 }
 
 export function normalizeBlockLayout(blocks: BuilderBlock[]): BuilderBlock[] {

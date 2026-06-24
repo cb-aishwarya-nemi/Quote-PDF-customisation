@@ -4,6 +4,7 @@ import {
   getCustomTextVariableDef,
   getVariableCatalog,
   getVariableDef,
+  normalizeVariableKey,
   type VariableFieldDef,
 } from "@/lib/derive-template-variables"
 import type { BuilderBlock, BuilderBlockType, InlineFragment } from "@/types/prompt-builder"
@@ -133,7 +134,8 @@ export function resolveFragmentVariableDef(
   _content: Record<string, unknown>,
 ): VariableFieldDef | undefined {
   if (fragment.variableKey) {
-    const catalog = getVariableCatalog().find((e) => e.key === fragment.variableKey)
+    const key = normalizeVariableKey(fragment.variableKey)
+    const catalog = getVariableCatalog().find((e) => e.key === key)
     if (catalog) {
       return {
         field: fragment.field,
@@ -168,8 +170,9 @@ export function createVariableFragment(
   _label: string,
   existingFields: Set<string>,
 ): Extract<InlineFragment, { kind: "variable" }> {
+  const normalized = normalizeVariableKey(variableKey)
   const key =
-    getVariableCatalog().find((e) => e.key === variableKey)?.key ?? variableKey
+    getVariableCatalog().find((e) => e.key === normalized)?.key ?? normalized
 
   for (const blockType of [
     "company_address",

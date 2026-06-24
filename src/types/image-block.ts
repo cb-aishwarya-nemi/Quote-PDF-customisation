@@ -3,6 +3,12 @@ export type ImageBlockMediaType = "image" | "pdf"
 export const IMAGE_BLOCK_ACCEPT =
   ".pdf,application/pdf,image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
 
+export const IMAGE_ONLY_ACCEPT =
+  "image/jpeg,image/png,image/gif,image/webp,image/svg+xml,.jpg,.jpeg,.png,.gif,.webp,.svg"
+
+export const PDF_PPT_ACCEPT =
+  ".pdf,application/pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
 export type ImageTextOverlayAlign = "left" | "center" | "right"
 
 export type ImageTextOverlayStyle = "light" | "dark" | "pill"

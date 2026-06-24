@@ -6,7 +6,7 @@ import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { IMAGE_BLOCK_ACCEPT } from "@/types/image-block"
 import type { BuilderBlockType } from "@/types/prompt-builder"
 import { Plus } from "lucide-react"
-import { useRef } from "react"
+import { useRef, useState } from "react"
 
 type Props = {
   afterId?: string
@@ -29,14 +29,19 @@ export function AddBlockDivider({
   const addImageBlockFromFile = usePromptBuilderStore((s) => s.addImageBlockFromFile)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pendingInsertRef = useRef<string | undefined>(undefined)
+  const [fileAccept, setFileAccept] = useState(IMAGE_BLOCK_ACCEPT)
 
   const menuTypes =
     allowedTypes ?? ADDABLE_BLOCKS.map((entry) => entry.type)
 
-  const handleAdd = (type: BuilderBlockType) => {
+  const handleAdd = (
+    type: BuilderBlockType,
+    options?: { fileAccept?: string },
+  ) => {
     if (type === "custom_image") {
       pendingInsertRef.current = atStart ? "__start__" : afterId
-      fileInputRef.current?.click()
+      setFileAccept(options?.fileAccept ?? IMAGE_BLOCK_ACCEPT)
+      requestAnimationFrame(() => fileInputRef.current?.click())
       return
     }
     addBlock(type, atStart ? "__start__" : afterId, pageId)
@@ -47,14 +52,14 @@ export function AddBlockDivider({
       <input
         ref={fileInputRef}
         type="file"
-        accept={IMAGE_BLOCK_ACCEPT}
+        accept={fileAccept}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0]
           e.target.value = ""
           const insertAfter = pendingInsertRef.current
           pendingInsertRef.current = undefined
-          if (file) addImageBlockFromFile(file, insertAfter)
+          if (file) addImageBlockFromFile(file, insertAfter, pageId)
         }}
       />
       <div
@@ -127,15 +132,20 @@ export function AddBesideBlockDivider({
     ? findBlockInTemplate(template, blockId)
     : undefined
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [fileAccept, setFileAccept] = useState(IMAGE_BLOCK_ACCEPT)
 
   const baseTypes = allowedTypes ?? ADDABLE_BLOCKS.map((entry) => entry.type)
   const allowedBesideTypes = leftBlock
     ? filterTypesForBesideAdd(leftBlock, baseTypes)
     : baseTypes
 
-  const handleAdd = (type: BuilderBlockType) => {
+  const handleAdd = (
+    type: BuilderBlockType,
+    options?: { fileAccept?: string },
+  ) => {
     if (type === "custom_image") {
-      fileInputRef.current?.click()
+      setFileAccept(options?.fileAccept ?? IMAGE_BLOCK_ACCEPT)
+      requestAnimationFrame(() => fileInputRef.current?.click())
       return
     }
     addBlockBeside(blockId, type, pageId)
@@ -150,7 +160,7 @@ export function AddBesideBlockDivider({
       <input
         ref={fileInputRef}
         type="file"
-        accept={IMAGE_BLOCK_ACCEPT}
+        accept={fileAccept}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0]

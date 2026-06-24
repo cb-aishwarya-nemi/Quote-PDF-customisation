@@ -43,47 +43,26 @@ export function parseColumnDropId(
   return { kind: "column", column, insertBeforeBlockId: ref }
 }
 
-export function resolveBlockDropTarget(
-  blocks: BuilderBlock[],
-  dragged: BuilderBlock,
-  overBlockId: string,
-  pointerX: number,
-  overRect: { left: number; width: number },
-): BlockDropTarget {
-  if (!blockAllowsHalfWidth(dragged.type)) {
-    return { kind: "reorder", insertBeforeBlockId: overBlockId }
+export function findColumnDropTarget(
+  overId: string | number | undefined | null,
+  collisionIds?: Array<string | number | undefined | null>,
+): BlockDropTarget | null {
+  const seen = new Set<string>()
+  const candidates: Array<string | number | undefined | null> = [
+    overId,
+    ...(collisionIds ?? []),
+  ]
+
+  for (const id of candidates) {
+    if (id == null) continue
+    const key = String(id)
+    if (seen.has(key)) continue
+    seen.add(key)
+    const target = parseColumnDropId(id)
+    if (target) return target
   }
 
-  const overIndex = blocks.findIndex((block) => block.id === overBlockId)
-  if (overIndex < 0) {
-    return { kind: "reorder", insertBeforeBlockId: overBlockId }
-  }
-
-  const overBlock = blocks[overIndex]
-  const overColumn = getLayoutColumn(overBlock.content)
-  const isLeftHalf = pointerX < overRect.left + overRect.width / 2
-
-  if (isLeftHalf) {
-    return { kind: "column", column: "left", insertBeforeBlockId: overBlockId }
-  }
-
-  if (
-    overColumn === "left" &&
-    canBlocksFormPair(overBlock, dragged.type)
-  ) {
-    const next = blocks[overIndex + 1]
-    if (next && getLayoutColumn(next.content) === "right") {
-      return { kind: "column", column: "right", insertBeforeBlockId: next.id }
-    }
-    return { kind: "pair-right", leftBlockId: overBlockId }
-  }
-
-  const next = blocks[overIndex + 1]
-  return {
-    kind: "column",
-    column: "right",
-    insertBeforeBlockId: next?.id ?? "__end__",
-  }
+  return null
 }
 
 export function applyBlockDrop(
@@ -94,10 +73,16 @@ export function applyBlockDrop(
   const dragged = blocks.find((block) => block.id === draggedId)
   if (!dragged) return blocks
 
+  const originalIndex = blocks.findIndex((block) => block.id === draggedId)
   let list = blocks.filter((block) => block.id !== draggedId)
+  const insertOptions = { draggedId, originalIndex }
 
   if (target.kind === "reorder") {
-    const insertIndex = resolveInsertIndex(list, target.insertBeforeBlockId)
+    const insertIndex = resolveInsertIndex(
+      list,
+      target.insertBeforeBlockId,
+      insertOptions,
+    )
     if (insertIndex < 0) return blocks
     list.splice(insertIndex, 0, dragged)
     return enforceBlockLayoutRules(list)
@@ -108,11 +93,19 @@ export function applyBlockDrop(
     const leftIndex = list.findIndex((block) => block.id === target.leftBlockId)
     if (leftIndex < 0) return blocks
     const leftBlock = list[leftIndex]
-    if (
-      getLayoutColumn(leftBlock.content) !== "left" ||
-      !canBlocksFormPair(leftBlock, dragged.type)
-    ) {
-      return blocks
+    const canPair =
+      getLayoutColumn(leftBlock.content) === "left" &&
+      canBlocksFormPair(leftBlock, dragged.type)
+
+    if (!canPair) {
+      const placed = setBlockLayoutColumn(dragged, "right")
+      const next = list[leftIndex + 1]
+      if (next && getLayoutColumn(next.content) === "right") {
+        list[leftIndex + 1] = placed
+      } else {
+        list.splice(leftIndex + 1, 0, placed)
+      }
+      return enforceBlockLayoutRules(list)
     }
 
     const next = list[leftIndex + 1]
@@ -125,14 +118,22 @@ export function applyBlockDrop(
   }
 
   if (!blockAllowsHalfWidth(dragged.type)) {
-    const insertIndex = resolveInsertIndex(list, target.insertBeforeBlockId)
+    const insertIndex = resolveInsertIndex(
+      list,
+      target.insertBeforeBlockId,
+      insertOptions,
+    )
     if (insertIndex < 0) return blocks
     list.splice(insertIndex, 0, dragged)
     return enforceBlockLayoutRules(list)
   }
 
   const placed = setBlockLayoutColumn(dragged, target.column)
-  const insertIndex = resolveInsertIndex(list, target.insertBeforeBlockId)
+  const insertIndex = resolveInsertIndex(
+    list,
+    target.insertBeforeBlockId,
+    insertOptions,
+  )
   if (insertIndex < 0) return blocks
 
   if (
@@ -152,8 +153,22 @@ export function applyBlockDrop(
 function resolveInsertIndex(
   blocks: BuilderBlock[],
   insertBeforeBlockId: string,
+  options?: { draggedId?: string; originalIndex?: number },
 ): number {
   if (insertBeforeBlockId === "__end__") return blocks.length
   if (insertBeforeBlockId === "__start__") return 0
-  return blocks.findIndex((block) => block.id === insertBeforeBlockId)
+
+  const index = blocks.findIndex((block) => block.id === insertBeforeBlockId)
+  if (index >= 0) return index
+
+  if (
+    options?.draggedId &&
+    insertBeforeBlockId === options.draggedId &&
+    options.originalIndex != null &&
+    options.originalIndex >= 0
+  ) {
+    return Math.min(options.originalIndex, blocks.length)
+  }
+
+  return -1
 }

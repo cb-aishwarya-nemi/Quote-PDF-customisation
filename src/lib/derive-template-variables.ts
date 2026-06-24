@@ -123,6 +123,20 @@ const BLOCK_FIELD_DEFS: Partial<Record<BuilderBlockType, FieldDef[]>> = {
   ],
 }
 
+const DEFAULT_LINE_ITEM_NAMES = [
+  "Enterprise Platform — Annual",
+  "Premium Support",
+  "Implementation services",
+]
+const DEFAULT_LINE_ITEM_AMOUNTS = ["$48,000", "$12,000", "$8,500"]
+const DEFAULT_ENTITLEMENT_NAMES = ["Platform seats", "API calls", "Premium support"]
+const DEFAULT_ENTITLEMENT_LIMITS = ["250 users", "5M / month", "24×5"]
+const DEFAULT_ENTITLEMENT_NOTES = [
+  "Named seats; overage billed monthly at list rate.",
+  "Metered usage with 10% burst allowance.",
+  "Dedicated CSM and quarterly business reviews.",
+]
+
 const VARIABLE_DUMMY_VALUES: Record<string, string> = {
   "company.name": "Acme Software Inc.",
   "company.address": "548 Market St, Suite 400\nSan Francisco, CA 94104",
@@ -148,62 +162,29 @@ const VARIABLE_DUMMY_VALUES: Record<string, string> = {
   "quote.salesperson": "Jordan Lee",
   "quote.subtotal": "$68,500",
   "quote.entitlements_label": "Entitlements & usage",
+  "quote.line_items.name": DEFAULT_LINE_ITEM_NAMES[0] ?? "Line item",
+  "quote.line_items.amount": DEFAULT_LINE_ITEM_AMOUNTS[0] ?? "$0.00",
+  "quote.entitlements.name": DEFAULT_ENTITLEMENT_NAMES[0] ?? "Entitlement",
+  "quote.entitlements.limit": DEFAULT_ENTITLEMENT_LIMITS[0] ?? "—",
+  "quote.entitlements.notes": DEFAULT_ENTITLEMENT_NOTES[0] ?? "",
   "ae.name": "Jordan Lee",
   "ae.title": "Account Executive",
   "ae.email": "jordan.lee@chargebee.com",
   "ae.phone": "+1 (415) 555-0142",
 }
 
-const DEFAULT_LINE_ITEM_NAMES = [
-  "Enterprise Platform — Annual",
-  "Premium Support",
-  "Implementation services",
-]
-const DEFAULT_LINE_ITEM_AMOUNTS = ["$48,000", "$12,000", "$8,500"]
-const DEFAULT_ENTITLEMENT_NAMES = ["Platform seats", "API calls", "Premium support"]
-const DEFAULT_ENTITLEMENT_LIMITS = ["250 users", "5M / month", "24×5"]
-const DEFAULT_ENTITLEMENT_NOTES = [
-  "Named seats; overage billed monthly at list rate.",
-  "Metered usage with 10% burst allowance.",
-  "Dedicated CSM and quarterly business reviews.",
-]
+/** Strip numeric array indices from merge keys, e.g. `quote.entitlements[0].name` → `quote.entitlements.name`. */
+export function normalizeVariableKey(variableKey: string): string {
+  return variableKey.replace(/\[\d+\]/g, "")
+}
 
 /** Placeholder shown when a merge field is first inserted — not the variable label. */
 export function getVariableDummyValue(variableKey: string): string {
-  const known = VARIABLE_DUMMY_VALUES[variableKey]
+  const key = normalizeVariableKey(variableKey)
+  const known = VARIABLE_DUMMY_VALUES[key]
   if (known) return known
 
-  const lineName = variableKey.match(/^quote\.line_items\[(\d+)\]\.name$/)
-  if (lineName) {
-    const i = Number(lineName[1])
-    return DEFAULT_LINE_ITEM_NAMES[i] ?? `Line item ${i + 1}`
-  }
-
-  const lineAmount = variableKey.match(/^quote\.line_items\[(\d+)\]\.amount$/)
-  if (lineAmount) {
-    const i = Number(lineAmount[1])
-    return DEFAULT_LINE_ITEM_AMOUNTS[i] ?? "$0.00"
-  }
-
-  const entName = variableKey.match(/^quote\.entitlements\[(\d+)\]\.name$/)
-  if (entName) {
-    const i = Number(entName[1])
-    return DEFAULT_ENTITLEMENT_NAMES[i] ?? `Entitlement ${i + 1}`
-  }
-
-  const entLimit = variableKey.match(/^quote\.entitlements\[(\d+)\]\.limit$/)
-  if (entLimit) {
-    const i = Number(entLimit[1])
-    return DEFAULT_ENTITLEMENT_LIMITS[i] ?? "—"
-  }
-
-  const entNotes = variableKey.match(/^quote\.entitlements\[(\d+)\]\.notes$/)
-  if (entNotes) {
-    const i = Number(entNotes[1])
-    return DEFAULT_ENTITLEMENT_NOTES[i] ?? ""
-  }
-
-  if (variableKey.startsWith("custom.")) {
+  if (key.startsWith("custom.")) {
     return "Sample text"
   }
 
@@ -251,14 +232,14 @@ export function getPricingRowVariableDef(
   if (part === "item") {
     return {
       field: `rows[${index}].item`,
-      key: `quote.line_items[${index}].name`,
+      key: "quote.line_items.name",
       label: `Line item ${index + 1}`,
       category: "pricing",
     }
   }
   return {
     field: `rows[${index}].amount`,
-    key: `quote.line_items[${index}].amount`,
+    key: "quote.line_items.amount",
     label: `Line item ${index + 1} amount`,
     category: "pricing",
   }
@@ -271,7 +252,7 @@ export function getEntitlementRowVariableDef(
   if (part === "name") {
     return {
       field: `rows[${index}].name`,
-      key: `quote.entitlements[${index}].name`,
+      key: "quote.entitlements.name",
       label: `Entitlement ${index + 1}`,
       category: "quote",
     }
@@ -279,14 +260,14 @@ export function getEntitlementRowVariableDef(
   if (part === "limit") {
     return {
       field: `rows[${index}].limit`,
-      key: `quote.entitlements[${index}].limit`,
+      key: "quote.entitlements.limit",
       label: `Entitlement ${index + 1} limit`,
       category: "quote",
     }
   }
   return {
     field: `rows[${index}].notes`,
-    key: `quote.entitlements[${index}].notes`,
+    key: "quote.entitlements.notes",
     label: `Entitlement ${index + 1} notes`,
     category: "quote",
   }
@@ -339,35 +320,17 @@ export function getVariableCatalog(): VariableCatalogEntry[] {
     }
   }
 
-  for (let i = 0; i < 8; i++) {
-    const nameKey = `quote.line_items[${i}].name`
-    const amountKey = `quote.line_items[${i}].amount`
-    if (!seen.has(nameKey)) {
-      seen.add(nameKey)
-      list.push({ key: nameKey, label: `Line item ${i + 1}`, category: "pricing" })
-    }
-    if (!seen.has(amountKey)) {
-      seen.add(amountKey)
-      list.push({
-        key: amountKey,
-        label: `Line item ${i + 1} amount`,
-        category: "pricing",
-      })
-    }
-  }
-
-  for (let i = 0; i < 8; i++) {
-    for (const [suffix, label] of [
-      ["name", `Entitlement ${i + 1}`],
-      ["limit", `Entitlement ${i + 1} limit`],
-      ["notes", `Entitlement ${i + 1} notes`],
-    ] as const) {
-      const key = `quote.entitlements[${i}].${suffix}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        list.push({ key, label, category: "quote" })
-      }
-    }
+  const rowCatalog: VariableCatalogEntry[] = [
+    { key: "quote.line_items.name", label: "Line item", category: "pricing" },
+    { key: "quote.line_items.amount", label: "Line item amount", category: "pricing" },
+    { key: "quote.entitlements.name", label: "Entitlement", category: "quote" },
+    { key: "quote.entitlements.limit", label: "Entitlement limit", category: "quote" },
+    { key: "quote.entitlements.notes", label: "Entitlement notes", category: "quote" },
+  ]
+  for (const entry of rowCatalog) {
+    if (seen.has(entry.key)) continue
+    seen.add(entry.key)
+    list.push(entry)
   }
 
   return list.sort((a, b) => {
@@ -440,9 +403,14 @@ export function resolveVariableDef(
   if (!base) return variableDef
 
   const overrideKey = getVariableKeyOverrides(content)[field]
-  if (!overrideKey || overrideKey === base.key) return base
+  if (!overrideKey) return base
 
-  const catalogEntry = getVariableCatalog().find((entry) => entry.key === overrideKey)
+  const normalizedOverride = normalizeVariableKey(overrideKey)
+  if (normalizedOverride === base.key) return base
+
+  const catalogEntry = getVariableCatalog().find(
+    (entry) => entry.key === normalizedOverride,
+  )
   if (catalogEntry) {
     return {
       ...base,
@@ -454,9 +422,9 @@ export function resolveVariableDef(
 
   return {
     ...base,
-    key: overrideKey,
-    label: overrideKey,
-    category: categoryFromKey(overrideKey),
+    key: normalizedOverride,
+    label: normalizedOverride,
+    category: categoryFromKey(normalizedOverride),
   }
 }
 

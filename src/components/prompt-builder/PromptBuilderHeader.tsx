@@ -1,5 +1,6 @@
 import { AutosaveIndicator } from "@/components/prompt-builder/AutosaveIndicator"
-import { useBuilderAutosave } from "@/hooks/use-builder-autosave"
+import { flushBuilderAutosave, useBuilderAutosave } from "@/hooks/use-builder-autosave"
+import { templateRequiresPublishConditions } from "@/lib/template-routing"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { ChevronRight } from "lucide-react"
@@ -9,14 +10,33 @@ export function PromptBuilderHeader() {
   const navigate = useNavigate()
   const template = usePromptBuilderStore((s) => s.template)
   const setTemplateName = usePromptBuilderStore((s) => s.setTemplateName)
+  const highlightConditionStrip = usePromptBuilderStore(
+    (s) => s.highlightConditionStrip,
+  )
   const publishBuilderTemplate = useTemplateLibraryStore(
     (s) => s.publishBuilderTemplate,
   )
+  const ensureInitialized = useTemplateLibraryStore((s) => s.ensureInitialized)
   const { lastSavedAt, visible } = useBuilderAutosave()
 
   const handlePublish = () => {
     if (!template) return
-    const published = publishBuilderTemplate(template)
+    ensureInitialized()
+    flushBuilderAutosave()
+    const latest = usePromptBuilderStore.getState().template ?? template
+    const library = useTemplateLibraryStore.getState().publishedTemplates
+
+    if (
+      templateRequiresPublishConditions(
+        library,
+        latest.displayCondition ?? null,
+      )
+    ) {
+      highlightConditionStrip()
+      return
+    }
+
+    const published = publishBuilderTemplate(latest)
     navigate("/templates", {
       state: { highlightTemplateId: published.id, fromPublish: true },
     })

@@ -17,8 +17,7 @@ import { TemplateDocumentFrame } from "@/components/prompt-builder/TemplateDocum
 import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import {
   columnDropId,
-  parseColumnDropId,
-  resolveBlockDropTarget,
+  findColumnDropTarget,
 } from "@/lib/block-layout-drag"
 import { blockAllowsHalfWidth } from "@/lib/block-layout-rules"
 import {
@@ -48,6 +47,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
 import {
@@ -185,7 +185,6 @@ function renderPreviewRow(
 type Props = {
   template: BuilderTemplate
   pageId: string
-  pageNumber?: number
   isPreview: boolean
   isSales: boolean
   exportRef?: React.Ref<HTMLDivElement>
@@ -195,7 +194,6 @@ type Props = {
 export function PageBlockCanvas({
   template,
   pageId,
-  pageNumber,
   isPreview,
   isSales,
   exportRef,
@@ -210,6 +208,7 @@ export function PageBlockCanvas({
   const isSalesPreview = useIsSalesPreview()
 
   const [activeDragBlock, setActiveDragBlock] = useState<BuilderBlock | null>(null)
+  const lastColumnDropIdRef = useRef<string | null>(null)
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null)
   const [hoveredInsertKey, setHoveredInsertKey] = useState<string | null>(null)
   const hoverClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -287,7 +286,20 @@ export function PageBlockCanvas({
   const handleDragStart = (event: DragStartEvent) => {
     if (event.active.data.current?.source === INLINE_FRAGMENT_DRAG_SOURCE) return
     const block = event.active.data.current?.block as BuilderBlock | undefined
+    lastColumnDropIdRef.current = null
     setActiveDragBlock(block ?? null)
+  }
+
+  const handleDragOver = (event: DragOverEvent) => {
+    if (event.active.data.current?.source === INLINE_FRAGMENT_DRAG_SOURCE) return
+
+    const columnTarget = findColumnDropTarget(
+      event.over?.id,
+      event.collisions?.map((collision) => collision.id),
+    )
+    if (columnTarget && event.over?.id != null) {
+      lastColumnDropIdRef.current = String(event.over.id)
+    }
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -295,6 +307,7 @@ export function PageBlockCanvas({
 
     if (active.data.current?.source === INLINE_FRAGMENT_DRAG_SOURCE) {
       setActiveDragBlock(null)
+      lastColumnDropIdRef.current = null
       if (!over || active.id === over.id) return
       if (over.data.current?.source !== INLINE_FRAGMENT_DRAG_SOURCE) return
       const blockId = active.data.current?.blockId as string | undefined
@@ -304,46 +317,33 @@ export function PageBlockCanvas({
       return
     }
 
-    setActiveDragBlock(null)
-    if (!over || active.id === over.id) return
-
     const draggedId = String(active.id)
-    const dragged = blocks.find((block) => block.id === draggedId)
-    if (!dragged) return
+    if (!blocks.some((block) => block.id === draggedId)) {
+      setActiveDragBlock(null)
+      lastColumnDropIdRef.current = null
+      return
+    }
 
-    const columnTarget = parseColumnDropId(over.id)
+    const columnTarget =
+      findColumnDropTarget(
+        over?.id,
+        event.collisions?.map((collision) => collision.id),
+      ) ??
+      findColumnDropTarget(lastColumnDropIdRef.current)
+
+    lastColumnDropIdRef.current = null
+    setActiveDragBlock(null)
+
     if (columnTarget) {
       moveBlockDrop(draggedId, columnTarget, pageId)
       return
     }
 
+    if (!over || active.id === over.id) return
+
     const overBlockId = String(over.id)
     const overIndex = blocks.findIndex((block) => block.id === overBlockId)
     if (overIndex < 0) return
-
-    const translated = active.rect.current.translated
-    const overRect = over.rect
-    if (translated && overRect) {
-      const pointerX = translated.left + translated.width / 2
-      const target = resolveBlockDropTarget(
-        blocks,
-        dragged,
-        overBlockId,
-        pointerX,
-        overRect,
-      )
-
-      if (target.kind === "reorder") {
-        const fromIndex = blocks.findIndex((block) => block.id === draggedId)
-        if (fromIndex >= 0) {
-          reorderBlocks(fromIndex, overIndex, pageId)
-        }
-        return
-      }
-
-      moveBlockDrop(draggedId, target, pageId)
-      return
-    }
 
     const fromIndex = blocks.findIndex((block) => block.id === draggedId)
     if (fromIndex >= 0) {
@@ -358,10 +358,9 @@ export function PageBlockCanvas({
   const firstRowBlockIds =
     layoutRows.length > 0 ? blockIdsForRow(layoutRows[0]) : []
 
-  const isEmptyCustomBlockPage =
-    !isQuotePageId(pageId) &&
-    isBlockCustomPage(template, pageId) &&
-    blocks.length === 0
+  const isEmptyBlockPage =
+    blocks.length === 0 &&
+    (isQuotePageId(pageId) || isBlockCustomPage(template, pageId))
 
   const previewContent = !templateAppliesInPreview ? (
     <div className="py-12 text-center">
@@ -371,7 +370,7 @@ export function PageBlockCanvas({
       </p>
     </div>
   ) : visiblePreviewRows.length === 0 ? (
-    isEmptyCustomBlockPage ? (
+    isEmptyBlockPage ? (
       <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 text-center">
         <p className="text-[13px] text-gray-500">This page has no blocks yet.</p>
       </div>
@@ -554,19 +553,19 @@ export function PageBlockCanvas({
       <TemplateDocumentFrame
         exportRef={exportRef}
         onClick={onFrameClick}
-        pageNumber={pageNumber}
+        pageId={pageId}
       >
         {previewContent}
       </TemplateDocumentFrame>,
     )
   }
 
-  if (isEmptyCustomBlockPage && !isSales) {
+  if (isEmptyBlockPage && !isSales) {
     return wrapPage(
       <TemplateDocumentFrame
         exportRef={exportRef}
         onClick={onFrameClick}
-        pageNumber={pageNumber}
+        pageId={pageId}
       >
         <BlockPageEmptyState pageId={pageId} allowedTypes={allowedBlockTypes} />
       </TemplateDocumentFrame>,
@@ -578,12 +577,13 @@ export function PageBlockCanvas({
       sensors={sensors}
       collisionDetection={canvasCollisionDetection}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <TemplateDocumentFrame
         exportRef={exportRef}
         onClick={onFrameClick}
-        pageNumber={pageNumber}
+        pageId={pageId}
       >
         {editCanvas}
       </TemplateDocumentFrame>

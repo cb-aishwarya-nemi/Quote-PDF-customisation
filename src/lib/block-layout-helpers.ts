@@ -67,3 +67,29 @@ export function moveBlockBeforeType(
   next.splice(insertAt, 0, block)
   return next
 }
+
+/** Place signature at the end of commercial blocks, but before AE details when present. */
+export function moveSignatureToClosingPosition(
+  blocks: BuilderBlock[],
+): BuilderBlock[] | null {
+  const signatureIndex = findBlockIndex(blocks, "signature")
+  if (signatureIndex < 0) return null
+
+  const aeIndex = findBlockIndex(blocks, "ae_profile")
+  if (aeIndex >= 0) {
+    return moveBlockBeforeType(blocks, "signature", "ae_profile")
+  }
+
+  return moveBlockToEnd(blocks, "signature")
+}
+
+export function resolveDefaultAddBlockIndex(
+  blocks: BuilderBlock[],
+  type: BuilderBlockType,
+): number {
+  if (type === "signature") {
+    const aeIndex = findBlockIndex(blocks, "ae_profile")
+    if (aeIndex >= 0) return aeIndex
+  }
+  return blocks.length
+}

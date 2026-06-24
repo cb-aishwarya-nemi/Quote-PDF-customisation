@@ -298,8 +298,7 @@ export function deriveAgentSuggestions(input: {
         suggestVariant(suggestions, selected, "compact", "Compact entitlements", usedPrompts)
         break
       case "terms":
-        suggestVariant(suggestions, selected, "numbered", "Numbered terms", usedPrompts)
-        suggestVariant(suggestions, selected, "legal", "Legal dense terms", usedPrompts)
+        suggestVariant(suggestions, selected, "table", "Table terms", usedPrompts)
         push(
           suggestions,
           {

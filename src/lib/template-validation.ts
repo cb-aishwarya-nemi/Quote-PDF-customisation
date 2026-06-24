@@ -45,7 +45,6 @@ export function deriveTemplateValidationIssues(
   const tcvIndex = findBlockIndex(blocks, "tcv_summary")
   const termsIndex = findBlockIndex(blocks, "terms")
   const signatureIndex = findBlockIndex(blocks, "signature")
-  const aeIndex = findBlockIndex(blocks, "ae_profile")
 
   if (pricingIndex >= 0 && billedToIndex >= 0 && pricingIndex < billedToIndex) {
     pushIssue(issues, {
@@ -107,20 +106,6 @@ export function deriveTemplateValidationIssues(
       action: {
         label: "Move terms down",
         prompt: "Move terms and conditions after pricing",
-      },
-    })
-  }
-
-  if (aeIndex >= 0 && signatureIndex >= 0 && aeIndex < signatureIndex) {
-    pushIssue(issues, {
-      id: "ae-before-signature",
-      severity: "warning",
-      message:
-        "AE profile is placed before the signature block. Sales contact info usually sits at the very end — move it?",
-      blockId: blocks[aeIndex].id,
-      action: {
-        label: "Move AE to end",
-        prompt: "Move AE profile after the signature block",
       },
     })
   }
@@ -265,16 +250,6 @@ export function deriveLayoutVisualHints(
           addBlockHint(blockHints, blocks[termsIndex].id, {
             issueId: issue.id,
             canvasMessage: "Terms usually follow pricing",
-          })
-        }
-        break
-      }
-      case "ae-before-signature": {
-        const aeIndex = findBlockIndex(blocks, "ae_profile")
-        if (aeIndex >= 0) {
-          addBlockHint(blockHints, blocks[aeIndex].id, {
-            issueId: issue.id,
-            canvasMessage: "AE profile usually sits at the very end",
           })
         }
         break

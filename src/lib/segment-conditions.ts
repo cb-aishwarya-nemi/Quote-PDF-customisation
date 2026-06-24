@@ -5,17 +5,52 @@ import {
   getConditionValueLabel,
   operatorLabel,
 } from "@/lib/condition-fields"
-import type { ConditionOperator, SegmentCondition } from "@/types/prompt-builder"
+import type {
+  BlockDisplayCondition,
+  ConditionMatchMode,
+  ConditionOperator,
+  ConditionRuleGroup,
+  SegmentCondition,
+} from "@/types/prompt-builder"
 
-export type ConditionInput = SegmentCondition | SegmentCondition[] | null | undefined
+export type ConditionInput = BlockDisplayCondition
 
 export function normalizeConditionRules(input: ConditionInput): SegmentCondition[] {
   if (!input) return []
   if (Array.isArray(input)) {
     return input.filter((rule) => rule && typeof rule.field === "string" && rule.field)
   }
-  if (typeof input === "object" && "field" in input) return [input]
+  if (typeof input === "object") {
+    if ("rules" in input && Array.isArray(input.rules)) {
+      return input.rules.filter(
+        (rule) => rule && typeof rule.field === "string" && rule.field,
+      )
+    }
+    if ("field" in input) return [input]
+  }
   return []
+}
+
+export function parseConditionInput(input: ConditionInput): {
+  match: ConditionMatchMode
+  rules: SegmentCondition[]
+} {
+  const rules = normalizeConditionRules(input)
+  let match: ConditionMatchMode = "and"
+  if (input && typeof input === "object" && !Array.isArray(input) && "rules" in input) {
+    const group = input as ConditionRuleGroup
+    match = group.match === "or" ? "or" : "and"
+  }
+  return { match, rules }
+}
+
+export function serializeConditionGroup(
+  match: ConditionMatchMode,
+  rules: SegmentCondition[],
+): BlockDisplayCondition {
+  if (rules.length === 0) return null
+  if (rules.length === 1) return rules[0]
+  return { match, rules }
 }
 
 export function hasConditions(input: ConditionInput): boolean {
@@ -30,24 +65,28 @@ export function describeConditionRule(rule: SegmentCondition): string {
 }
 
 export function describeConditionRules(input: ConditionInput): string {
-  const rules = normalizeConditionRules(input)
+  const { match, rules } = parseConditionInput(input)
   if (rules.length === 0) return "Always shown"
   if (rules.length === 1) return `Show when ${describeConditionRule(rules[0])}`
-  return `Show when ${rules.map(describeConditionRule).join(" AND ")}`
+  const join = match === "or" ? " OR " : " AND "
+  return `Show when ${rules.map(describeConditionRule).join(join)}`
 }
 
 export function describeConditionRulesShort(input: ConditionInput): string {
-  const rules = normalizeConditionRules(input)
+  const { match, rules } = parseConditionInput(input)
   if (rules.length === 0) return "Always shown"
-  return rules.map(describeConditionRule).join(" · ")
+  if (rules.length === 1) return describeConditionRule(rules[0])
+  const join = match === "or" ? " OR " : " AND "
+  return rules.map(describeConditionRule).join(join)
 }
 
 export function conditionRulesEqual(a: ConditionInput, b: ConditionInput): boolean {
-  const rulesA = normalizeConditionRules(a)
-  const rulesB = normalizeConditionRules(b)
-  if (rulesA.length !== rulesB.length) return false
-  return rulesA.every((rule, index) => {
-    const other = rulesB[index]
+  const parsedA = parseConditionInput(a)
+  const parsedB = parseConditionInput(b)
+  if (parsedA.match !== parsedB.match) return false
+  if (parsedA.rules.length !== parsedB.rules.length) return false
+  return parsedA.rules.every((rule, index) => {
+    const other = parsedB.rules[index]
     return (
       rule.field === other.field &&
       rule.operator === other.operator &&

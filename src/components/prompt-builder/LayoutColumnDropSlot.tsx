@@ -16,7 +16,7 @@ export function LayoutColumnDropSlot({ id, visible = true, label }: Props) {
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[52px] rounded-lg border-2 border-dashed transition-colors ${
+      className={`min-h-[56px] rounded-lg border-2 border-dashed transition-colors ${
         isOver
           ? "border-blue-400 bg-blue-50/70"
           : "border-blue-200/80 bg-blue-50/20"

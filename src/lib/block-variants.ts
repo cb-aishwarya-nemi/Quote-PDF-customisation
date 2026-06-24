@@ -1,4 +1,8 @@
 import type { BuilderBlockType } from "@/types/prompt-builder"
+import {
+  IMAGE_ONLY_ACCEPT,
+  PDF_PPT_ACCEPT,
+} from "@/types/image-block"
 
 export type BlockVariantOption = {
   id: string
@@ -145,19 +149,14 @@ export const BLOCK_VARIANTS: Record<BuilderBlockType, BlockVariantOption[]> = {
   ],
   terms: [
     {
-      id: "standard",
-      label: "Cards",
-      description: "Each clause in its own bordered card",
+      id: "dense",
+      label: "Content dense",
+      description: "Continuous free-flowing legal text with optional tables",
     },
     {
-      id: "numbered",
-      label: "Numbered",
-      description: "Ordered clauses with step numbers",
-    },
-    {
-      id: "legal",
-      label: "Legal dense",
-      description: "Continuous fine print — traditional T&C",
+      id: "table",
+      label: "Table",
+      description: "Terms organized in editable rows and columns",
     },
   ],
   custom_text: [
@@ -252,11 +251,16 @@ export const BLOCK_VARIANTS: Record<BuilderBlockType, BlockVariantOption[]> = {
   ],
 }
 
-export const ADDABLE_BLOCKS: {
+export type AddableBlockEntry = {
   type: BuilderBlockType
   label: string
   group: "standard" | "custom"
-}[] = [
+  /** Unique key when multiple menu items share the same block type */
+  menuKey?: string
+  fileAccept?: string
+}
+
+export const ADDABLE_BLOCKS: AddableBlockEntry[] = [
   { type: "company_logo", label: "Company logo", group: "standard" },
   { type: "company_address", label: "Company address", group: "standard" },
   { type: "tcv_summary", label: "TCV summary", group: "standard" },
@@ -267,7 +271,20 @@ export const ADDABLE_BLOCKS: {
   { type: "entitlements", label: "Entitlements", group: "standard" },
   { type: "custom_text", label: "Text", group: "custom" },
   { type: "custom_table", label: "Table", group: "custom" },
-  { type: "custom_image", label: "Image / PDF", group: "custom" },
+  {
+    type: "custom_image",
+    menuKey: "custom_image_image",
+    label: "Image",
+    group: "custom",
+    fileAccept: IMAGE_ONLY_ACCEPT,
+  },
+  {
+    type: "custom_image",
+    menuKey: "custom_image_document",
+    label: "PDF/PPT",
+    group: "custom",
+    fileAccept: PDF_PPT_ACCEPT,
+  },
   { type: "signature", label: "Signature", group: "standard" },
   { type: "ae_profile", label: "AE details", group: "standard" },
 ]

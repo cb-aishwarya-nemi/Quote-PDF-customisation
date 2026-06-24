@@ -46,7 +46,7 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           onChange={(v) => onField("title", v)}
           className="text-[20px] font-semibold text-gray-900"
         />
-        <p className="mt-1 text-[13px] text-gray-500">
+        <p className="mt-1 whitespace-nowrap text-[13px] text-gray-500">
           <EditableLabel
             blockId={block.id}
             value={preparedFor}
@@ -63,7 +63,7 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
           />
         </p>
         <div className="mx-auto mt-4 flex max-w-md flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] text-gray-600">
-          <span>
+          <span className="whitespace-nowrap">
             <EditableLabel
               blockId={block.id}
               value={quoteNum}
@@ -80,7 +80,7 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
             />
           </span>
           <span className="text-gray-300">·</span>
-          <span>
+          <span className="whitespace-nowrap">
             <EditableLabel
               blockId={block.id}
               value={issued}
@@ -97,7 +97,7 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
             />
           </span>
           <span className="text-gray-300">·</span>
-          <span>
+          <span className="whitespace-nowrap">
             <EditableLabel
               blockId={block.id}
               value={validUntil}
@@ -121,7 +121,7 @@ export function QuoteSummaryHeaderView({ block, onField }: Props) {
   if (variant === "minimal") {
     return (
       <div className={innerShell}>
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-2 text-[13px] text-gray-700">
+        <div className="flex flex-nowrap items-baseline gap-x-2 overflow-x-auto text-[13px] text-gray-700">
         <InlineEditable
           blockId={block.id}
           value={String(c.title ?? "Quote Summary")}

@@ -1,4 +1,4 @@
-import { ADDABLE_BLOCKS } from "@/lib/block-variants"
+import { ADDABLE_BLOCKS, type AddableBlockEntry } from "@/lib/block-variants"
 import type { BuilderBlockType } from "@/types/prompt-builder"
 import {
   useCallback,
@@ -10,6 +10,10 @@ import {
   type ReactNode,
 } from "react"
 import { createPortal } from "react-dom"
+
+export type AddBlockOptions = {
+  fileAccept?: string
+}
 
 function BlockMenuButton({
   label,
@@ -41,8 +45,8 @@ function BlockMenuSection({
   onAdd,
 }: {
   title: string
-  items: { type: BuilderBlockType; label: string }[]
-  onAdd: (type: BuilderBlockType) => void
+  items: AddableBlockEntry[]
+  onAdd: (entry: AddableBlockEntry) => void
 }) {
   return (
     <div>
@@ -52,9 +56,9 @@ function BlockMenuSection({
       <div className="grid grid-cols-2 gap-2">
         {items.map((item) => (
           <BlockMenuButton
-            key={item.type}
+            key={item.menuKey ?? item.type}
             label={item.label}
-            onClick={() => onAdd(item.type)}
+            onClick={() => onAdd(item)}
           />
         ))}
       </div>
@@ -63,7 +67,7 @@ function BlockMenuSection({
 }
 
 type Props = {
-  onAdd: (type: BuilderBlockType) => void
+  onAdd: (type: BuilderBlockType, options?: AddBlockOptions) => void
   align?: "center" | "right"
   allowedTypes?: BuilderBlockType[]
   children: (openMenu: (e: ReactMouseEvent<HTMLButtonElement>) => void) => ReactNode
@@ -75,14 +79,14 @@ export function AddBlockMenu({ onAdd, align = "center", allowedTypes, children }
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  const isAllowed = (entry: AddableBlockEntry) =>
+    !allowedTypes || allowedTypes.includes(entry.type)
+
   const standardBlocks = ADDABLE_BLOCKS.filter(
-    (b) =>
-      b.group === "standard" &&
-      (!allowedTypes || allowedTypes.includes(b.type)),
+    (entry) => entry.group === "standard" && isAllowed(entry),
   )
   const customBlocks = ADDABLE_BLOCKS.filter(
-    (b) =>
-      b.group === "custom" && (!allowedTypes || allowedTypes.includes(b.type)),
+    (entry) => entry.group === "custom" && isAllowed(entry),
   )
 
   const updatePosition = useCallback(() => {
@@ -130,9 +134,9 @@ export function AddBlockMenu({ onAdd, align = "center", allowedTypes, children }
     return () => document.removeEventListener("mousedown", onPointerDown)
   }, [open])
 
-  const handleAdd = (type: BuilderBlockType) => {
+  const handleAdd = (entry: AddableBlockEntry) => {
     setOpen(false)
-    onAdd(type)
+    onAdd(entry.type, { fileAccept: entry.fileAccept })
   }
 
   const openMenu = (e: ReactMouseEvent<HTMLButtonElement>) => {

@@ -3,9 +3,11 @@ import { useIsTemplateEditMode } from "@/hooks/use-builder-editor-mode"
 import {
   describeConditionRule,
   hasConditions,
-  normalizeConditionRules,
+  parseConditionInput,
 } from "@/lib/segment-conditions"
+import { hasMultipleTemplatesInLibrary } from "@/lib/template-routing"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
+import { useTemplateLibraryStore } from "@/store/template-library-store"
 import type { BlockDisplayCondition } from "@/types/prompt-builder"
 import { Filter } from "lucide-react"
 import {
@@ -20,21 +22,27 @@ import { createPortal } from "react-dom"
 const PLACEHOLDER_MESSAGE =
   "Set the conditions that determine when this quote pdf will be used"
 
+const HIGHLIGHT_MESSAGE =
+  "Define quote-level conditions before publishing — more than one template exists"
+
 const STRIP_WIDTH_CLASS = "w-full"
 
 function describeStripMessage(
   displayCondition: BlockDisplayCondition,
   canEdit: boolean,
+  highlighted: boolean,
 ): string {
   if (!hasConditions(displayCondition)) {
+    if (highlighted) return HIGHLIGHT_MESSAGE
     return canEdit ? PLACEHOLDER_MESSAGE : "Used for all quotes"
   }
 
-  const rules = normalizeConditionRules(displayCondition)
+  const { match, rules } = parseConditionInput(displayCondition)
   if (rules.length === 1) {
     return `Used when ${describeConditionRule(rules[0])}`
   }
-  return `Used when ${rules.map(describeConditionRule).join(" AND ")}`
+  const join = match === "or" ? " OR " : " AND "
+  return `Used when ${rules.map(describeConditionRule).join(join)}`
 }
 
 export function TemplateConditionStrip({
@@ -44,6 +52,12 @@ export function TemplateConditionStrip({
 }) {
   const template = usePromptBuilderStore((s) => s.template)
   const editorMode = usePromptBuilderStore((s) => s.editorMode)
+  const highlighted = usePromptBuilderStore((s) => s.conditionStripHighlighted)
+  const clearConditionStripHighlight = usePromptBuilderStore(
+    (s) => s.clearConditionStripHighlight,
+  )
+  const publishedTemplates = useTemplateLibraryStore((s) => s.publishedTemplates)
+  const ensureInitialized = useTemplateLibraryStore((s) => s.ensureInitialized)
   const setTemplateDisplayCondition = usePromptBuilderStore(
     (s) => s.setTemplateDisplayCondition,
   )
@@ -56,7 +70,22 @@ export function TemplateConditionStrip({
   const displayCondition = (template?.displayCondition ??
     null) as BlockDisplayCondition
   const hasCondition = hasConditions(displayCondition)
-  const message = describeStripMessage(displayCondition, isTemplateEdit)
+  const showStrip = hasMultipleTemplatesInLibrary(publishedTemplates)
+  const message = describeStripMessage(
+    displayCondition,
+    isTemplateEdit,
+    highlighted && !hasCondition,
+  )
+
+  useEffect(() => {
+    ensureInitialized()
+  }, [ensureInitialized])
+
+  useEffect(() => {
+    if (!highlighted) return
+    stripRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    if (isTemplateEdit) setOpen(true)
+  }, [highlighted, isTemplateEdit])
 
   const updatePosition = useCallback(() => {
     const strip = stripRef.current
@@ -100,7 +129,9 @@ export function TemplateConditionStrip({
     return () => document.removeEventListener("mousedown", onPointerDown)
   }, [open])
 
-  if (!template || editorMode === "sales") return null
+  if (!template || editorMode === "sales" || !showStrip) {
+    return null
+  }
 
   const menu =
     open &&
@@ -110,10 +141,13 @@ export function TemplateConditionStrip({
         ref={menuRef}
         className="fixed z-[200]"
         style={{ top: menuPos.top, left: menuPos.left }}
-        title="Use this template when"
-        rules={normalizeConditionRules(displayCondition)}
-        onChange={(rules) => {
-          setTemplateDisplayCondition(rules)
+        title="Use this template"
+        rules={displayCondition}
+        onChange={(condition) => {
+          setTemplateDisplayCondition(condition)
+          if (hasConditions(condition)) {
+            clearConditionStripHighlight()
+          }
         }}
       />,
       document.body,
@@ -123,15 +157,20 @@ export function TemplateConditionStrip({
     <>
       <div
         ref={stripRef}
-        className={`${STRIP_WIDTH_CLASS} overflow-hidden rounded-lg border border-amber-200/90 bg-amber-50 ${
-          variant === "floating" ? "shadow-sm" : ""
-        }`}
+        className={`${STRIP_WIDTH_CLASS} overflow-hidden rounded-lg border border-amber-200/90 bg-amber-50 transition-[box-shadow,ring-color] duration-300 ${
+          highlighted && !hasCondition
+            ? "ring-2 ring-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.25)]"
+            : ""
+        } ${variant === "floating" ? "shadow-sm" : ""}`}
         onClick={(event) => event.stopPropagation()}
       >
         {isTemplateEdit ? (
           <button
             type="button"
-            onClick={() => setOpen((value) => !value)}
+            onClick={() => {
+              clearConditionStripHighlight()
+              setOpen((value) => !value)
+            }}
             className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-amber-100/60"
             aria-expanded={open}
             aria-label="Quote-level conditions"
@@ -143,7 +182,7 @@ export function TemplateConditionStrip({
             />
             <p
               className={`min-w-0 truncate text-[11px] leading-snug ${
-                hasCondition
+                hasCondition || highlighted
                   ? "font-medium text-amber-950"
                   : "text-amber-900/90"
               }`}
@@ -162,7 +201,7 @@ export function TemplateConditionStrip({
             />
             <p
               className={`min-w-0 truncate text-[11px] leading-snug ${
-                hasCondition
+                hasCondition || highlighted
                   ? "font-medium text-amber-950"
                   : "text-amber-900/90"
               }`}

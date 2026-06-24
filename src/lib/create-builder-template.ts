@@ -2,6 +2,7 @@ import { createId } from "@/lib/create-id"
 import { BLOCK_VARIANTS, LOGO_VARIANTS } from "@/lib/block-variants"
 import { enforceBlockLayoutRules } from "@/lib/block-layout"
 import { defaultLayoutColumnForType } from "@/lib/block-layout-rules"
+import { DEFAULT_DOCUMENT_FOOTER } from "@/lib/document-footer"
 import {
   DEFAULT_COMPANY_LOGO_FILE_NAME,
   DEFAULT_COMPANY_LOGO_URL,
@@ -28,11 +29,13 @@ const VARIANT_TO_BUILDER: Partial<Record<BlockType, BuilderBlockType>> = {
 const defaultTermsSegments = (): ConditionalSegment[] => [
   {
     id: createId("seg"),
+    kind: "text",
     condition: null,
     text: "This quote is valid for 30 days from the date above. Payment terms are Net-30 unless otherwise specified. Services commence upon signed order form.",
   },
   {
     id: createId("seg"),
+    kind: "text",
     condition: {
       field: "deal_type",
       operator: "is",
@@ -43,6 +46,7 @@ const defaultTermsSegments = (): ConditionalSegment[] => [
   },
   {
     id: createId("seg"),
+    kind: "text",
     condition: {
       field: "deal_type",
       operator: "is",
@@ -53,6 +57,7 @@ const defaultTermsSegments = (): ConditionalSegment[] => [
   },
   {
     id: createId("seg"),
+    kind: "text",
     condition: {
       field: "customer_region",
       operator: "is",
@@ -328,6 +333,19 @@ export function createStandaloneBuilderBlock(
 
 export const DEFAULT_QUOTE_TEMPLATE_NAME = "Standard business quote"
 
+export function createBlankBuilderTemplate(
+  id: string,
+  options?: { name?: string },
+): BuilderTemplate {
+  return {
+    id,
+    name: options?.name ?? "Untitled template",
+    displayCondition: null,
+    documentFooter: { ...DEFAULT_DOCUMENT_FOOTER },
+    blocks: [],
+  }
+}
+
 export function createBuilderTemplate(
   id: string,
   options?: { variantId?: string; presetId?: string; name?: string },
@@ -376,6 +394,7 @@ export function createBuilderTemplate(
     variantId: options?.variantId,
     presetId: options?.presetId,
     displayCondition: null,
+    documentFooter: { ...DEFAULT_DOCUMENT_FOOTER },
     blocks: normalizeBuilderBlocks(blocks),
   }
 }

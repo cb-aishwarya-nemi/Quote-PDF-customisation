@@ -28,7 +28,35 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { RemovePageButton } from "@/components/prompt-builder/RemovePageButton"
-import { BookOpen, FileText, GripVertical, Plus } from "lucide-react"
+import { BookOpen, FileText, GripVertical } from "lucide-react"
+
+function PageInsertLine({
+  onAdd,
+  position = "below",
+}: {
+  onAdd: () => void
+  position?: "above" | "below"
+}) {
+  const label =
+    position === "above" ? "Add page above" : "Add page below"
+
+  return (
+    <div
+      className="pointer-events-none max-h-0 overflow-hidden py-0 opacity-0 transition-all duration-150 group-hover/page-item:pointer-events-auto group-hover/page-item:max-h-4 group-hover/page-item:py-1.5 group-hover/page-item:opacity-100"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={onAdd}
+        className="flex w-full items-center px-0.5"
+        aria-label={label}
+        title={label}
+      >
+        <span className="h-0.5 w-full rounded-full bg-blue-300 transition-colors hover:bg-blue-500" />
+      </button>
+    </div>
+  )
+}
 
 function CustomPageThumbnail({ pageId }: { pageId: string }) {
   const template = usePromptBuilderStore((s) => s.template)
@@ -51,7 +79,9 @@ function CustomPageThumbnail({ pageId }: { pageId: string }) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-1 bg-gradient-to-b from-slate-50 to-slate-100 px-2 text-center">
         <FileText className="size-4 text-slate-400" strokeWidth={1.5} />
-        <span className="text-[9px] font-medium text-slate-500">Blank page</span>
+        <span className="text-[9px] font-medium text-slate-500">
+          {customPage?.label ?? "Blank page"}
+        </span>
       </div>
     )
   }
@@ -76,7 +106,9 @@ function CustomPageThumbnail({ pageId }: { pageId: string }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-1 bg-gradient-to-b from-slate-50 to-slate-100 px-2 text-center">
       <BookOpen className="size-4 text-slate-400" strokeWidth={1.5} />
-      <span className="text-[9px] font-medium text-slate-500">Cover page</span>
+      <span className="text-[9px] font-medium text-slate-500">
+        {customPage?.label ?? "Page 1"}
+      </span>
     </div>
   )
 }
@@ -238,34 +270,35 @@ export function PagesPanel() {
             items={pages.map((page) => page.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="space-y-2.5 pl-1">
+            <div className="space-y-0 pl-1">
               {pages.map((page) => (
-                <SortablePageCard
-                  key={page.id}
-                  page={page}
-                  selected={activePageId === page.id}
-                  sortable={canReorder}
-                  canDelete={canDeletePages && page.kind === "custom"}
-                  onSelect={() => handleSelectPage(page.id)}
-                />
+                <div key={page.id} className="group/page-item">
+                  {isTemplateEdit && (
+                    <PageInsertLine
+                      position="above"
+                      onAdd={() => addPage(page.id, "before")}
+                    />
+                  )}
+                  <SortablePageCard
+                    page={page}
+                    selected={activePageId === page.id}
+                    sortable={canReorder}
+                    canDelete={canDeletePages && page.kind === "custom"}
+                    onSelect={() => handleSelectPage(page.id)}
+                  />
+                  {isTemplateEdit && (
+                    <PageInsertLine
+                      position="below"
+                      onAdd={() => addPage(page.id, "after")}
+                    />
+                  )}
+                </div>
               ))}
             </div>
           </SortableContext>
         </DndContext>
       </div>
 
-      {isTemplateEdit && (
-        <div className="border-t border-gray-200 bg-gray-50/60 px-3 py-3">
-          <button
-            type="button"
-            onClick={() => addPage()}
-            className="flex w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-medium text-gray-700 shadow-sm transition-colors hover:border-blue-300 hover:text-blue-700"
-          >
-            <Plus className="size-3.5 shrink-0" />
-            Add page
-          </button>
-        </div>
-      )}
     </aside>
   )
 }

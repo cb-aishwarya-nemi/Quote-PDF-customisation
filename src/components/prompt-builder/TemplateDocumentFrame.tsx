@@ -1,3 +1,4 @@
+import { DocumentFooter } from "@/components/prompt-builder/DocumentFooter"
 import {
   CANVAS_DOCUMENT_MAX_WIDTH,
   CANVAS_DOCUMENT_PADDING_PX,
@@ -9,7 +10,8 @@ type Props = {
   onClick?: (e: MouseEvent<HTMLDivElement>) => void
   exportRef?: Ref<HTMLDivElement>
   className?: string
-  pageNumber?: number
+  pageId?: string
+  showFooter?: boolean
 }
 
 /** White quote document shell — uniform padding on all four sides. */
@@ -18,7 +20,8 @@ export function TemplateDocumentFrame({
   onClick,
   exportRef,
   className,
-  pageNumber,
+  pageId,
+  showFooter = true,
 }: Props) {
   return (
     <div
@@ -32,16 +35,7 @@ export function TemplateDocumentFrame({
       onClick={onClick}
     >
       <div className="min-h-0 flex-1">{children}</div>
-      {pageNumber !== undefined && (
-        <footer
-          className="mt-8 flex shrink-0 justify-center border-t border-gray-100 pt-3"
-          aria-label={`Page ${pageNumber}`}
-        >
-          <span className="text-[11px] font-medium tabular-nums text-gray-400">
-            {pageNumber}
-          </span>
-        </footer>
-      )}
+      {showFooter && pageId ? <DocumentFooter pageId={pageId} /> : null}
     </div>
   )
 }

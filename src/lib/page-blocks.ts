@@ -14,8 +14,8 @@ import type {
 
 export type CustomPageKind = "intro" | "blocks"
 
-/** Image / PDF blocks belong on the intro (cover) page only. */
-export const INTRO_ONLY_BLOCK_TYPES: BuilderBlockType[] = ["custom_image"]
+/** @deprecated Intro pages use IntroPageEditor — no block-tray types are intro-only. */
+export const INTRO_ONLY_BLOCK_TYPES: BuilderBlockType[] = []
 
 export function getCustomPageKind(page: CustomTemplatePage): CustomPageKind {
   if (page.kind === "intro" || page.kind === "blocks") return page.kind

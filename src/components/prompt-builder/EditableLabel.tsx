@@ -20,7 +20,8 @@ export function EditableLabel({
       value={value}
       onChange={onChange}
       blockId={blockId}
-      className={`${as === "block" ? "block" : "inline"} ${className}`}
+      width={as === "inline" ? "hug" : "full"}
+      className={`${as === "block" ? "block whitespace-nowrap" : "inline whitespace-nowrap"} ${className}`}
     />
   )
 }

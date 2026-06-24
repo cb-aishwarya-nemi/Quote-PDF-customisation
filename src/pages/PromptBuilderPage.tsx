@@ -3,6 +3,8 @@ import { PagesPanel } from "@/components/prompt-builder/PagesPanel"
 import { QuoteCanvasArea } from "@/components/prompt-builder/QuoteCanvasArea"
 import { PromptBuilderHeader } from "@/components/prompt-builder/PromptBuilderHeader"
 import { PromptBuilderSkeleton } from "@/components/prompt-builder/PromptBuilderSkeleton"
+import { TextFormattingBarFixed } from "@/components/prompt-builder/TextFormattingBar"
+import { useTextFormattingFocusBridge } from "@/hooks/use-text-formatting-focus-bridge"
 import { createBuilderTemplate } from "@/lib/create-builder-template"
 import type { BuilderNavigationState } from "@/lib/navigate-to-builder"
 import { applyCreationContextToTemplate } from "@/lib/derive-template-from-creation"
@@ -20,6 +22,8 @@ export function PromptBuilderPage() {
   const navigate = useNavigate()
   const initTemplate = usePromptBuilderStore((s) => s.initTemplate)
   const template = usePromptBuilderStore((s) => s.template)
+
+  useTextFormattingFocusBridge()
 
   const navState = location.state as BuilderNavigationState | null
   const [showSkeleton, setShowSkeleton] = useState(
@@ -104,6 +108,7 @@ export function PromptBuilderPage() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f5f7fa]">
       <PromptBuilderHeader />
+      <TextFormattingBarFixed />
       {showSkeleton ? (
         <PromptBuilderSkeleton />
       ) : (

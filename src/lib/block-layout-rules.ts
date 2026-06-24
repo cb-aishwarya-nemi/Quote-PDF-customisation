@@ -111,6 +111,7 @@ export function widthLabelForBlock(block: BuilderBlock): "50%" | "100%" {
 
 export function defaultLayoutColumnForType(type: BuilderBlockType): LayoutColumn {
   if (blockRequiresFullWidth(type)) return "full"
-  if (type === "company_logo" || type === "company_address") return "left"
+  if (type === "company_logo") return "left"
+  if (type === "company_address") return "right"
   return "full"
 }

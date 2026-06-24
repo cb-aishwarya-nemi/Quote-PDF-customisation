@@ -110,7 +110,6 @@ function SortableFragmentRow({
             onChange={(value) => onFieldChange(fragment.field, value)}
             layout={fragment.field === "address" ? "stacked" : "inline"}
             multiline={fragment.field === "address"}
-            hugContents={fragment.field === "address"}
             className={textClassName ?? "text-[13px] text-gray-800"}
           />
         )}

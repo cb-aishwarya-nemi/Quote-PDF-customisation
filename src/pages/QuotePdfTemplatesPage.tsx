@@ -1,6 +1,7 @@
 import { DefaultTemplatePreviewModal } from "@/components/templates/DefaultTemplatePreviewModal"
 import { CreateAdditionalTemplateModal } from "@/components/templates/CreateAdditionalTemplateModal"
 import { CreateQuoteTemplateModal } from "@/components/templates/CreateQuoteTemplateModal"
+import { NewTemplateMenu } from "@/components/templates/NewTemplateMenu"
 import {
   GenerateTemplateProcessingModal,
   type TemplateGenerationResult,
@@ -18,7 +19,9 @@ import {
   type TemplateLibraryQuery,
 } from "@/lib/filter-published-templates"
 import { navigateToPromptBuilder } from "@/lib/navigate-to-builder"
-import { isDefaultPublishedTemplate, resolveTemplatesPageLibrary } from "@/lib/seed-demo-library"
+import { createBlankBuilderTemplate } from "@/lib/create-builder-template"
+import { createId } from "@/lib/create-id"
+import { isDefaultPublishedTemplate, hasUserCreatedTemplates, resolveTemplatesPageLibrary } from "@/lib/seed-demo-library"
 import type { PublishedBuilderTemplate } from "@/store/template-library-store"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { ChevronRight, Plus } from "lucide-react"
@@ -54,6 +57,10 @@ export function QuotePdfTemplatesPage() {
   )
 
   const hasTemplates = displayTemplates.length > 0
+  const hasUserCreatedTemplate = useMemo(
+    () => hasUserCreatedTemplates(displayTemplates),
+    [displayTemplates],
+  )
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [processingOpen, setProcessingOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
@@ -190,13 +197,18 @@ export function QuotePdfTemplatesPage() {
     setProcessingOpen(true)
   }, [])
 
+  const handleStartBlank = useCallback(() => {
+    const id = createId("tpl")
+    const template = createBlankBuilderTemplate(id)
+    navigateToPromptBuilder(navigate, { template, name: template.name }, id)
+  }, [navigate])
+
   const firstTemplateModalVisible = !hasTemplates && !processingOpen
-  const additionalTemplateModalVisible = hasTemplates && createModalOpen && !processingOpen
+  const newTemplateModalVisible = createModalOpen && !processingOpen
 
   const closeCreateModal = useCallback(() => {
-    if (!hasTemplates) return
     setCreateModalOpen(false)
-  }, [hasTemplates])
+  }, [])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-16">
@@ -226,16 +238,22 @@ export function QuotePdfTemplatesPage() {
               Quote PDF templates
             </h1>
           </div>
-          {hasTemplates && (
-            <button
-              type="button"
-              onClick={() => setCreateModalOpen(true)}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-            >
-              <Plus className="size-3.5" />
-              New template
-            </button>
-          )}
+          {hasTemplates &&
+            (hasUserCreatedTemplate ? (
+              <NewTemplateMenu
+                onGenerateFromPdf={() => setCreateModalOpen(true)}
+                onStartBlank={handleStartBlank}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                <Plus className="size-3.5" />
+                New template
+              </button>
+            ))}
         </div>
       </header>
 
@@ -274,12 +292,12 @@ export function QuotePdfTemplatesPage() {
       <CreateQuoteTemplateModal
         open={firstTemplateModalVisible}
         onClose={closeCreateModal}
-        dismissible={hasTemplates}
+        dismissible={false}
         onGenerate={handleGenerate}
       />
 
       <CreateAdditionalTemplateModal
-        open={additionalTemplateModalVisible}
+        open={newTemplateModalVisible}
         onClose={closeCreateModal}
         onGenerate={handleGenerate}
       />

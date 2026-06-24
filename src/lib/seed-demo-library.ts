@@ -22,6 +22,12 @@ export function isDefaultPublishedTemplate(
   return id === DEFAULT_PUBLISHED_TEMPLATE_ID
 }
 
+export function hasUserCreatedTemplates(
+  templates: PublishedBuilderTemplate[],
+): boolean {
+  return templates.some((template) => !isDefaultPublishedTemplate(template))
+}
+
 const DEMO_PUBLISHED_AT = "2026-03-21T14:30:00.000Z"
 const DEMO_UPDATED_RECENT = "2026-06-19T09:15:00.000Z"
 

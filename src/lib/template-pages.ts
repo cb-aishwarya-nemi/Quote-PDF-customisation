@@ -3,6 +3,8 @@ import type {
   CustomTemplatePage,
   TemplatePageId,
 } from "@/types/prompt-builder"
+import { createId } from "@/lib/create-id"
+import { normalizeDocumentFooter } from "@/lib/document-footer"
 
 export const QUOTE_PAGE_ID = "quote" as const
 /** Legacy id for templates that used a single intro page */
@@ -13,6 +15,30 @@ export type TemplatePageItem = {
   label: string
   kind: "custom" | "quote"
   pageNumber: number
+}
+
+export function customPageLabel(pageNumber: number): string {
+  return `Page ${pageNumber}`
+}
+
+export function normalizeCustomPageLabel(
+  label: string | undefined,
+  pageNumber: number,
+): string {
+  if (!label || label === "Cover" || label === "Intro") {
+    return customPageLabel(pageNumber)
+  }
+  return label
+}
+
+/** Empty blocks page — shows the blank canvas with Add block. */
+export function createBlankBlocksPage(pageNumber: number): CustomTemplatePage {
+  return {
+    id: createId("page"),
+    label: customPageLabel(pageNumber),
+    kind: "blocks",
+    blocks: [],
+  }
 }
 
 export function isQuotePageId(pageId: string): boolean {
@@ -71,11 +97,12 @@ export function deriveTemplatePages(template: BuilderTemplate): TemplatePageItem
     }
 
     const custom = customPages.find((page) => page.id === id)
+    const pageNumber = index + 1
     return {
       id,
-      label: custom?.label ?? `Page ${index + 1}`,
+      label: normalizeCustomPageLabel(custom?.label, pageNumber),
       kind: "custom",
-      pageNumber: index + 1,
+      pageNumber,
     }
   })
 }
@@ -96,5 +123,6 @@ export function normalizeTemplatePages(template: BuilderTemplate): BuilderTempla
     customPages,
     pageOrder,
     introPage: undefined,
+    documentFooter: normalizeDocumentFooter(template.documentFooter),
   }
 }

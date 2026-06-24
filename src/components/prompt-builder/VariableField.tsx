@@ -6,6 +6,7 @@ import {
   getVariableFallbacks,
   getVariableKeyOverrides,
   isVariableRemoved,
+  normalizeVariableKey,
   resolveVariableDef,
   resolveVariableDisplayValue,
   type VariableFieldDef,
@@ -27,8 +28,6 @@ type Props = {
   layout?: "stacked" | "inline"
   /** Override lookup — pricing rows, custom text */
   variableDef?: VariableFieldDef
-  /** Multiline fields hug text width instead of stretching the row */
-  hugContents?: boolean
 }
 
 export function VariableField({
@@ -43,7 +42,6 @@ export function VariableField({
   showFieldLabel = false,
   layout = "stacked",
   variableDef,
-  hugContents = false,
 }: Props) {
   const isAdminPreview = useIsAdminPreview()
   const canEdit = useCanEditBlockContent(blockId)
@@ -57,6 +55,8 @@ export function VariableField({
   const def = removed ? baseDef : resolveVariableDef(blockType, field, content, baseDef)
 
   const displayValue = resolveVariableDisplayValue(value, content, field)
+  /** Always hug text so the variable pill sits immediately after the value. */
+  const useHugWidth = true
 
   if (isAdminPreview || !canEdit) {
     const display = displayValue || placeholder || "—"
@@ -64,13 +64,15 @@ export function VariableField({
       return <span className={`whitespace-nowrap ${className}`}>{display}</span>
     }
     return (
-      <div className={hugContents ? "w-fit max-w-full" : "min-w-0"}>
+      <div className="w-fit max-w-full">
         {showFieldLabel && def && (
           <span className="mb-1 block text-[9px] font-semibold uppercase tracking-wide text-gray-400">
             {def.label}
           </span>
         )}
-        <span className={`${multiline ? "whitespace-pre-wrap" : ""} ${className}`}>
+        <span
+          className={`${multiline ? "whitespace-pre-wrap" : "whitespace-nowrap"} ${className}`}
+        >
           {display}
         </span>
       </div>
@@ -86,13 +88,17 @@ export function VariableField({
         className={className}
         multiline={multiline}
         placeholder={placeholder}
+        width={useHugWidth ? "hug" : "full"}
       />
     )
   }
 
   const handleKeyChange = (newKey: string) => {
     const overrides = getVariableKeyOverrides(content)
-    updateBlockField(blockId, "variableKeys", { ...overrides, [field]: newKey })
+    updateBlockField(blockId, "variableKeys", {
+      ...overrides,
+      [field]: normalizeVariableKey(newKey),
+    })
   }
 
   const handleFallbackChange = (next: string) => {
@@ -137,13 +143,13 @@ export function VariableField({
       className={className}
       multiline={multiline}
       placeholder={placeholder}
-      width={multiline && hugContents ? "hug" : "full"}
+      width={useHugWidth ? "hug" : "full"}
     />
   )
 
   if (layout === "inline") {
     return (
-      <span className="inline-flex shrink-0 items-baseline gap-1.5">
+      <span className="inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap">
         {editable}
         {variablePill}
       </span>
@@ -151,17 +157,13 @@ export function VariableField({
   }
 
   return (
-    <div className={hugContents ? "w-fit max-w-full" : "min-w-0"}>
+    <div className={useHugWidth ? "w-fit max-w-full" : "min-w-0 w-full"}>
       {showFieldLabel && (
         <span className="mb-1 block text-[9px] font-semibold uppercase tracking-wide text-gray-400">
           {resolvedDef.label}
         </span>
       )}
-      <div
-        className={`${
-          hugContents ? "inline-flex w-fit max-w-full" : "flex"
-        } gap-1.5 ${multiline ? "items-start" : "items-baseline"}`}
-      >
+      <div className="inline-flex max-w-full items-start gap-1.5">
         {editable}
         <span className="shrink-0">{variablePill}</span>
       </div>

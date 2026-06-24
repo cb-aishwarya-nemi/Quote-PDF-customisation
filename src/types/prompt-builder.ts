@@ -37,6 +37,8 @@ export type BuilderBlockType =
 
 export type ConditionOperator = "is" | "is_not" | "contains"
 
+export type ConditionMatchMode = "and" | "or"
+
 export type SegmentCondition = {
   id?: string
   field: string
@@ -45,17 +47,32 @@ export type SegmentCondition = {
   label?: string
 }
 
-/** Empty array or null = always show. Multiple rules are combined with AND. */
-export type ConditionRuleSet = SegmentCondition[]
+export type ConditionRuleGroup = {
+  match?: ConditionMatchMode
+  rules: SegmentCondition[]
+}
+
+/** Empty array or null = always show. Multiple rules combined with match (default AND). */
+export type ConditionRuleSet = SegmentCondition[] | ConditionRuleGroup
 
 /** Block-level display condition — hide block when scenario doesn't match */
 export type BlockDisplayCondition = ConditionRuleSet | SegmentCondition | null
 
-export type ConditionalSegment = {
-  id: string
-  condition: BlockDisplayCondition
-  text: string
-}
+export type ConditionalSegment =
+  | {
+      id: string
+      condition: BlockDisplayCondition
+      kind?: "text"
+      text: string
+    }
+  | {
+      id: string
+      condition: BlockDisplayCondition
+      kind: "table"
+      headers: string[]
+      rows: string[][]
+      tableVariant?: string
+    }
 
 /** Inline text or merge-field chip inside a block — order stored in `inlineFragments`. */
 export type InlineFragment =
@@ -71,7 +88,7 @@ export type CustomPageKind = "intro" | "blocks"
 export type CustomTemplatePage = {
   id: string
   label?: string
-  /** Cover page — image/PDF only. Additional pages use `blocks`. */
+  /** Page 1 — image/PDF only. Additional pages use `blocks`. */
   kind?: CustomPageKind
   /** Image/PDF content for intro pages */
   content?: IntroPageContent
@@ -103,6 +120,19 @@ export type BuilderTemplate = {
   /** Order of page ids (custom page ids + quote) */
   pageOrder?: TemplatePageId[]
   blocks: BuilderBlock[]
+  /** Printed document footer — page numbers, quote #, customer */
+  documentFooter?: DocumentFooterConfig
+}
+
+export type DocumentFooterConfig = {
+  showPageNumber?: boolean
+  showQuoteNumber?: boolean
+  showCustomerName?: boolean
+  /** Printed pages the quote section spans (for `3-5/5` style). */
+  quotePageCount?: number
+  /** Fallback when no quote summary block is on the template */
+  quoteNumber?: string
+  customerName?: string
 }
 
 export type PreviewScenario = {
@@ -248,15 +278,16 @@ export const PREVIEW_SCENARIO_GROUPS: PreviewScenarioGroup[] = [
 export const PREVIEW_SCENARIOS: PreviewScenario[] =
   PREVIEW_SCENARIO_GROUPS.flatMap((g) => g.scenarios)
 
-import { normalizeConditionRules } from "@/lib/segment-conditions"
+import { parseConditionInput } from "@/lib/segment-conditions"
 
 export function segmentMatches(
   segment: ConditionalSegment,
   scenario: PreviewScenario,
 ): boolean {
-  const rules = normalizeConditionRules(segment.condition)
+  const { match, rules } = parseConditionInput(segment.condition)
   if (rules.length === 0) return true
-  return rules.every((rule) => conditionMatches(rule, scenario))
+  const results = rules.map((rule) => conditionMatches(rule, scenario))
+  return match === "or" ? results.some(Boolean) : results.every(Boolean)
 }
 
 export function conditionMatches(
@@ -281,9 +312,10 @@ export function blockIsVisible(
   displayCondition: BlockDisplayCondition,
   scenario: PreviewScenario,
 ): boolean {
-  const rules = normalizeConditionRules(displayCondition)
+  const { match, rules } = parseConditionInput(displayCondition)
   if (rules.length === 0) return true
-  return rules.every((rule) => conditionMatches(rule, scenario))
+  const results = rules.map((rule) => conditionMatches(rule, scenario))
+  return match === "or" ? results.some(Boolean) : results.every(Boolean)
 }
 
 export function templateAppliesToScenario(
