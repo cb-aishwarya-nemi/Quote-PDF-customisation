@@ -90,6 +90,10 @@ export function QuoteCanvasArea() {
   const hoverClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pageSectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const scrollSyncLockRef = useRef(false)
+  const activePageIdRef = useRef(activePageId)
+  const scrollFromObserverRef = useRef(false)
+
+  activePageIdRef.current = activePageId
 
   const cancelHoverClear = useCallback(() => {
     if (hoverClearTimerRef.current) {
@@ -126,6 +130,11 @@ export function QuoteCanvasArea() {
   )
 
   useEffect(() => {
+    if (scrollFromObserverRef.current) {
+      scrollFromObserverRef.current = false
+      return
+    }
+
     const section = pageSectionRefs.current[activePageId]
     const scrollEl = scrollRef.current
     if (!section || !scrollEl) return
@@ -162,13 +171,14 @@ export function QuoteCanvasArea() {
         if (!topEntry) return
 
         const pageId = topEntry.target.getAttribute("data-page-id")
-        if (pageId && pageId !== activePageId) {
+        if (pageId && pageId !== activePageIdRef.current) {
+          scrollFromObserverRef.current = true
           setActivePageId(pageId)
         }
       },
       {
         root: scrollEl,
-        threshold: [0.15, 0.35, 0.55, 0.75],
+        threshold: [0.25, 0.5, 0.75],
       },
     )
 
@@ -178,7 +188,7 @@ export function QuoteCanvasArea() {
     }
 
     return () => observer.disconnect()
-  }, [pages, activePageId, setActivePageId])
+  }, [pages, setActivePageId])
 
   if (!template) return null
 
