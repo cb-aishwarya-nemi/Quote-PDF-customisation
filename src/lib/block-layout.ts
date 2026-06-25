@@ -36,7 +36,7 @@ export function canAddBesideBlock(
   if (blockRequiresFullWidth(block.type)) return false
   if (getLayoutColumn(block.content) === "right") return false
 
-  if (block.type === "company_logo" && nextBlock?.type === "company_address") {
+  if (block.type === "company_logo" && nextBlock?.type === "company_details") {
     return false
   }
 

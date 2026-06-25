@@ -1,4 +1,4 @@
-import { CompanyAddressBlockView } from "@/components/prompt-builder/variants/CompanyAddressBlockView"
+import { CompanyDetailsBlockView } from "@/components/prompt-builder/variants/CompanyDetailsBlockView"
 import { CompanyLogoBlockView } from "@/components/prompt-builder/variants/CompanyLogoBlockView"
 import { EntitlementsBlockView } from "@/components/prompt-builder/variants/EntitlementsBlockView"
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
@@ -32,9 +32,9 @@ export function BuilderBlockView({ block }: Props) {
     case "company_logo":
       return <CompanyLogoBlockView block={block} />
 
-    case "company_address":
+    case "company_details":
       return (
-        <CompanyAddressBlockView
+        <CompanyDetailsBlockView
           block={block}
           onField={(field, value) => onField(field, value)}
         />

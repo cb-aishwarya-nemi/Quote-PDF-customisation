@@ -1,4 +1,5 @@
 import { BLOCK_VARIANTS } from "@/lib/block-variants"
+import { analyzeTermsConditionalOverlap } from "@/lib/terms-segments"
 import type {
   BuilderBlock,
   BuilderTemplate,
@@ -6,6 +7,7 @@ import type {
   ConditionalSegment,
   PreviewScenario,
 } from "@/types/prompt-builder"
+import { PREVIEW_SCENARIOS } from "@/types/prompt-builder"
 import { segmentHasConditionValue } from "@/lib/segment-conditions"
 
 export type AgentSuggestion = {
@@ -17,7 +19,7 @@ export type AgentSuggestion = {
 
 const BLOCK_LABELS: Record<string, string> = {
   company_logo: "company logo",
-  company_address: "company address",
+  company_details: "company details",
   tcv_summary: "TCV summary",
   billed_to: "billed to",
   contract_details: "contract details",
@@ -163,6 +165,26 @@ export function deriveAgentSuggestions(input: {
       },
       usedPrompts,
     )
+  }
+
+  const termsBlock = getBlock(template, "terms")
+  if (termsBlock) {
+    const overlap = analyzeTermsConditionalOverlap(
+      termsSegments(template),
+      PREVIEW_SCENARIOS,
+    )
+    if (overlap.hasOverlap) {
+      push(
+        suggestions,
+        {
+          id: "terms-conditional-overlap",
+          label: "Fix overlapping clauses",
+          prompt: "Help me fix overlapping conditional terms clauses",
+          priority: 88,
+        },
+        usedPrompts,
+      )
+    }
   }
 
   if (!hasBlock(template, "entitlements")) {

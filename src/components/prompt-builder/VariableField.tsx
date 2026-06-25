@@ -22,6 +22,7 @@ type Props = {
   onChange: (value: string) => void
   className?: string
   multiline?: boolean
+  lineBreaks?: "wrap" | "manual"
   placeholder?: string
   /** When parent already renders the human label (e.g. QUOTE #) */
   showFieldLabel?: boolean
@@ -38,6 +39,7 @@ export function VariableField({
   onChange,
   className = "",
   multiline,
+  lineBreaks,
   placeholder,
   showFieldLabel = false,
   layout = "stacked",
@@ -55,8 +57,14 @@ export function VariableField({
   const def = removed ? baseDef : resolveVariableDef(blockType, field, content, baseDef)
 
   const displayValue = resolveVariableDisplayValue(value, content, field)
-  /** Always hug text so the variable pill sits immediately after the value. */
-  const useHugWidth = true
+  const fieldWidth = multiline ? "full" : "hug"
+
+  const whitespaceClass =
+    multiline && lineBreaks === "manual"
+      ? "whitespace-pre"
+      : multiline
+        ? "whitespace-pre-wrap"
+        : "whitespace-nowrap"
 
   if (isAdminPreview || !canEdit) {
     const display = displayValue || placeholder || "—"
@@ -71,7 +79,7 @@ export function VariableField({
           </span>
         )}
         <span
-          className={`${multiline ? "whitespace-pre-wrap" : "whitespace-nowrap"} ${className}`}
+          className={`${whitespaceClass} ${className}`}
         >
           {display}
         </span>
@@ -87,8 +95,10 @@ export function VariableField({
         onChange={onChange}
         className={className}
         multiline={multiline}
+        lineBreaks={lineBreaks}
         placeholder={placeholder}
-        width={useHugWidth ? "hug" : "full"}
+        width={fieldWidth}
+        enableVariablePicker
       />
     )
   }
@@ -142,8 +152,10 @@ export function VariableField({
       onChange={onChange}
       className={className}
       multiline={multiline}
+      lineBreaks={lineBreaks}
       placeholder={placeholder}
-      width={useHugWidth ? "hug" : "full"}
+      width={fieldWidth}
+      enableVariablePicker
     />
   )
 
@@ -157,13 +169,19 @@ export function VariableField({
   }
 
   return (
-    <div className={useHugWidth ? "w-fit max-w-full" : "min-w-0 w-full"}>
+    <div className={fieldWidth === "full" ? "min-w-0 w-full" : "w-fit max-w-full"}>
       {showFieldLabel && (
         <span className="mb-1 block text-[9px] font-semibold uppercase tracking-wide text-gray-400">
           {resolvedDef.label}
         </span>
       )}
-      <div className="inline-flex max-w-full items-start gap-1.5">
+      <div
+        className={
+          fieldWidth === "full"
+            ? "flex min-w-0 w-full items-start gap-1.5"
+            : "inline-flex max-w-full items-start gap-1.5"
+        }
+      >
         {editable}
         <span className="shrink-0">{variablePill}</span>
       </div>

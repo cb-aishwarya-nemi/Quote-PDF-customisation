@@ -1,45 +1,40 @@
 import { AutosaveIndicator } from "@/components/prompt-builder/AutosaveIndicator"
 import { flushBuilderAutosave, useBuilderAutosave } from "@/hooks/use-builder-autosave"
-import { templateRequiresPublishConditions } from "@/lib/template-routing"
+import { TEMPLATE_NAME_PLACEHOLDER } from "@/lib/create-builder-template"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { ChevronRight } from "lucide-react"
+import { useEffect, useMemo, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 
 export function PromptBuilderHeader() {
   const navigate = useNavigate()
   const template = usePromptBuilderStore((s) => s.template)
   const setTemplateName = usePromptBuilderStore((s) => s.setTemplateName)
-  const highlightConditionStrip = usePromptBuilderStore(
-    (s) => s.highlightConditionStrip,
-  )
-  const publishBuilderTemplate = useTemplateLibraryStore(
-    (s) => s.publishBuilderTemplate,
-  )
+  const requestPublish = usePromptBuilderStore((s) => s.requestPublish)
   const ensureInitialized = useTemplateLibraryStore((s) => s.ensureInitialized)
+  const publishedTemplates = useTemplateLibraryStore((s) => s.publishedTemplates)
   const { lastSavedAt, visible } = useBuilderAutosave()
+  const nameInputRef = useRef<HTMLInputElement>(null)
+
+  const isPublished = useMemo(() => {
+    if (!template) return false
+    const record = publishedTemplates.find((entry) => entry.id === template.id)
+    return record?.status === "published"
+  }, [publishedTemplates, template])
+
+  const nameIsEmpty = !template?.name.trim()
+
+  useEffect(() => {
+    if (!template || template.name.trim()) return
+    nameInputRef.current?.focus()
+  }, [template?.id, template?.name])
 
   const handlePublish = () => {
     if (!template) return
     ensureInitialized()
     flushBuilderAutosave()
-    const latest = usePromptBuilderStore.getState().template ?? template
-    const library = useTemplateLibraryStore.getState().publishedTemplates
-
-    if (
-      templateRequiresPublishConditions(
-        library,
-        latest.displayCondition ?? null,
-      )
-    ) {
-      highlightConditionStrip()
-      return
-    }
-
-    const published = publishBuilderTemplate(latest)
-    navigate("/templates", {
-      state: { highlightTemplateId: published.id, fromPublish: true },
-    })
+    requestPublish()
   }
 
   return (
@@ -70,14 +65,24 @@ export function PromptBuilderHeader() {
             Quote PDF templates
           </button>
         </nav>
-        <input
-          type="text"
-          value={template?.name ?? ""}
-          onChange={(e) => setTemplateName(e.target.value)}
-          placeholder="Template name"
-          className="mt-0.5 w-full max-w-md truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[14px] font-semibold text-gray-900 outline-none transition-colors hover:border-gray-200 hover:bg-gray-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-          aria-label="Template name"
-        />
+        <div className="mt-0.5 flex min-w-0 items-center gap-2">
+          <input
+            ref={nameInputRef}
+            type="text"
+            value={template?.name ?? ""}
+            onChange={(e) => setTemplateName(e.target.value)}
+            placeholder={TEMPLATE_NAME_PLACEHOLDER}
+            className={`min-w-0 max-w-md flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[14px] font-semibold outline-none transition-colors placeholder:italic placeholder:font-normal placeholder:text-gray-400 hover:border-gray-200 hover:bg-gray-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 ${
+              nameIsEmpty ? "text-gray-400" : "text-gray-900"
+            }`}
+            aria-label="Template name"
+          />
+          {isPublished && (
+            <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+              Published
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
         <AutosaveIndicator
@@ -90,7 +95,7 @@ export function PromptBuilderHeader() {
           disabled={!template}
           className="rounded bg-blue-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
-          Publish
+          {isPublished ? "Save and publish" : "Publish"}
         </button>
       </div>
     </header>

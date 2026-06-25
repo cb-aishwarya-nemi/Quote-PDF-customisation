@@ -20,7 +20,7 @@ export function contractFieldLabel(
 }
 
 export const DEFAULT_LABELS = {
-  company_address: {
+  company_details: {
     sectionLabel: "From",
   },
   quote_summary_header: {

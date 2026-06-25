@@ -101,7 +101,7 @@ export function BlockChrome({
         )}
 
         <div
-          className="relative min-w-0"
+          className="relative min-w-0 cursor-default"
           onClick={() => setSelectedBlockId(block.id)}
           onKeyDown={(e) => {
             if (e.key === "Enter") setSelectedBlockId(block.id)
@@ -171,7 +171,7 @@ export function BlockChrome({
 
       <div
         ref={menuRef}
-        className={shellClasses}
+        className={`${shellClasses} cursor-default`}
         onClick={() => setSelectedBlockId(block.id)}
         onKeyDown={(e) => {
           if (e.key === "Enter") setSelectedBlockId(block.id)

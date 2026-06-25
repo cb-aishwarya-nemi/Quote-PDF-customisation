@@ -21,10 +21,15 @@ import {
 import { navigateToPromptBuilder } from "@/lib/navigate-to-builder"
 import { createBlankBuilderTemplate } from "@/lib/create-builder-template"
 import { createId } from "@/lib/create-id"
-import { isDefaultPublishedTemplate, hasUserCreatedTemplates, resolveTemplatesPageLibrary } from "@/lib/seed-demo-library"
+import {
+  hasUserCreatedTemplates,
+  isDefaultPublishedTemplate,
+  resolveTemplatesPageLibrary,
+  writeTemplatesPageDemoView,
+} from "@/lib/seed-demo-library"
 import type { PublishedBuilderTemplate } from "@/store/template-library-store"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
-import { ChevronRight, Plus } from "lucide-react"
+import { CheckCircle2, ChevronRight, Plus, X } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 
@@ -70,6 +75,9 @@ export function QuotePdfTemplatesPage() {
   const [highlightTemplateId, setHighlightTemplateId] = useState<
     string | undefined
   >(locationState?.highlightTemplateId)
+  const [publishSuccessVisible, setPublishSuccessVisible] = useState(
+    Boolean(locationState?.fromPublish && locationState?.highlightTemplateId),
+  )
   const [libraryQuery, setLibraryQuery] = useState<TemplateLibraryQuery>(
     DEFAULT_TEMPLATE_LIBRARY_QUERY,
   )
@@ -90,15 +98,42 @@ export function QuotePdfTemplatesPage() {
   }, [ensureInitialized])
 
   useEffect(() => {
-    if (locationState?.highlightTemplateId) {
-      setHighlightTemplateId(locationState.highlightTemplateId)
+    if (!locationState?.fromPublish || !locationState.highlightTemplateId) return
+
+    setHighlightTemplateId(locationState.highlightTemplateId)
+    setPublishSuccessVisible(true)
+    setLibraryQuery(DEFAULT_TEMPLATE_LIBRARY_QUERY)
+
+    if (demoView === "empty") {
+      setDemoView("data")
+      writeTemplatesPageDemoView("data")
     }
-  }, [locationState?.highlightTemplateId])
+
+    navigate(location.pathname, { replace: true, state: null })
+  }, [
+    demoView,
+    location.pathname,
+    locationState?.fromPublish,
+    locationState?.highlightTemplateId,
+    navigate,
+    setDemoView,
+  ])
+
+  useEffect(() => {
+    if (!highlightTemplateId) return
+    const timer = window.setTimeout(() => {
+      setHighlightTemplateId(undefined)
+    }, 6000)
+    return () => window.clearTimeout(timer)
+  }, [highlightTemplateId])
 
   useEffect(() => {
     setCreateModalOpen(false)
     setLibraryQuery(DEFAULT_TEMPLATE_LIBRARY_QUERY)
-    setHighlightTemplateId(undefined)
+    if (demoView === "empty") {
+      setHighlightTemplateId(undefined)
+      setPublishSuccessVisible(false)
+    }
   }, [demoView])
 
   const duplicateRecord = useCallback(
@@ -256,6 +291,30 @@ export function QuotePdfTemplatesPage() {
             ))}
         </div>
       </header>
+
+      {publishSuccessVisible && (
+        <div className="px-8 pt-4">
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold">Template published</p>
+                <p className="mt-0.5 text-[12px] text-emerald-800/90">
+                  Your template is live in the library below.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPublishSuccessVisible(false)}
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-emerald-700 transition-colors hover:bg-emerald-100/80"
+              aria-label="Dismiss"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {hasTemplates && (
         <div className="px-8 py-8">

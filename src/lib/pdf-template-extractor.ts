@@ -101,7 +101,7 @@ const SECTION_DEFINITIONS: {
 
 const CANONICAL_BLOCK_ORDER: BuilderBlockType[] = [
   "company_logo",
-  "company_address",
+  "company_details",
   "tcv_summary",
   "billed_to",
   "contract_details",
@@ -344,7 +344,7 @@ function parseSectionContent(
       return parseEntitlements(sectionText)
     case "ae_profile":
       return parseAeProfile(sectionText)
-    case "company_address":
+    case "company_details":
       return parseCompanyAddress(doc.pages[0]?.lines ?? [])
     default:
       return {}
@@ -375,7 +375,7 @@ function orderDetectedBlocks(
   }
 
   add("company_logo")
-  add("company_address")
+  add("company_details")
 
   for (const anchor of anchors) {
     add(anchor.type)
@@ -423,7 +423,7 @@ function buildBlocksFromDocument(
     let sectionText = ""
     if (anchorIndex >= 0) {
       sectionText = sectionTextBetween(doc.fullText, anchorIndex, endIndex)
-    } else if (type === "company_address") {
+    } else if (type === "company_details") {
       sectionText = doc.pages[0]?.text ?? ""
     } else if (type === "pricing" && pricingOverrides) {
       sectionText = doc.fullText

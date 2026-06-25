@@ -74,6 +74,7 @@ export function BilledToView({ block, onField }: Props) {
             value={String(c.address ?? "")}
             onChange={(v) => onField("address", v)}
             multiline
+            lineBreaks="manual"
             className="mt-2 text-[12px] leading-relaxed text-gray-600"
           />
         </div>
@@ -126,6 +127,7 @@ export function BilledToView({ block, onField }: Props) {
                   value={String(c.address ?? "")}
                   onChange={(v) => onField("address", v)}
                   multiline
+                  lineBreaks="manual"
                   className="text-[12px] leading-relaxed text-gray-600"
                 />
               </div>
@@ -174,6 +176,7 @@ export function BilledToView({ block, onField }: Props) {
         value={String(c.address ?? "")}
         onChange={(v) => onField("address", v)}
         multiline
+        lineBreaks="manual"
         className="mt-2 text-[12px] leading-relaxed text-gray-600"
       />
     </div>

@@ -175,7 +175,7 @@ export function createVariableFragment(
     getVariableCatalog().find((e) => e.key === normalized)?.key ?? normalized
 
   for (const blockType of [
-    "company_address",
+    "company_details",
     "quote_summary_header",
     "tcv_summary",
     "billed_to",

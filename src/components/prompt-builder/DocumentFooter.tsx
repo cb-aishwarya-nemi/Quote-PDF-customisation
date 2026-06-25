@@ -4,7 +4,6 @@ import {
   findQuoteSummaryBlock,
   normalizeDocumentFooter,
   resolveFooterCustomerName,
-  resolveFooterQuoteNumber,
 } from "@/lib/document-footer"
 import {
   useCanEditBlockStructure,
@@ -31,7 +30,6 @@ export function DocumentFooter({ pageId }: Props) {
 
   const footer = normalizeDocumentFooter(template.documentFooter)
   const pageLabel = formatFooterPageNumber(template, pageId)
-  const quoteNumber = resolveFooterQuoteNumber(template)
   const customerName = resolveFooterCustomerName(template)
   const quoteBlock = findQuoteSummaryBlock(template)
   const isReadOnly = isPreview || isAdminPreview || !canEditStructure
@@ -49,44 +47,15 @@ export function DocumentFooter({ pageId }: Props) {
     )
   }
 
-  if (footer.showQuoteNumber) {
-    parts.push(
-      <span key="quote" className="inline-flex shrink-0 items-baseline whitespace-nowrap">
-        {isReadOnly ? (
-          <span className="text-gray-500">{quoteNumber || "—"}</span>
-        ) : quoteBlock ? (
-          <InlineEditable
-            blockId={quoteBlock.id}
-            value={String(quoteBlock.content.quoteNumber ?? "")}
-            onChange={(value) =>
-              updateBlockField(quoteBlock.id, "quoteNumber", toPlainText(value))
-            }
-            className="text-gray-500"
-            hoverAffordance={false}
-            width="hug"
-            enableFormatting={false}
-            enableVariablePicker={false}
-          />
-        ) : (
-          <InlineEditable
-            value={footer.quoteNumber ?? ""}
-            onChange={(value) => setDocumentFooter({ quoteNumber: toPlainText(value) })}
-            className="text-gray-500"
-            hoverAffordance={false}
-            width="hug"
-            enableFormatting={false}
-            enableVariablePicker={false}
-          />
-        )}
-      </span>,
-    )
-  }
-
   if (footer.showCustomerName) {
     parts.push(
-      <span key="customer" className="inline-flex shrink-0 items-baseline whitespace-nowrap">
+      <span
+        key="quote-for"
+        className="inline-flex shrink-0 items-baseline whitespace-nowrap text-gray-500"
+      >
+        <span className="text-gray-400">Quote for </span>
         {isReadOnly ? (
-          <span className="text-gray-500">{customerName || "—"}</span>
+          <span>{customerName || "—"}</span>
         ) : quoteBlock ? (
           <InlineEditable
             blockId={quoteBlock.id}

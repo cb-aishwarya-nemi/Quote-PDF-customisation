@@ -134,7 +134,7 @@ export function GenerateTemplateProcessingModal({
       } catch {
         if (cancelled) return
         onCompleteRef.current({
-          template: createBuilderTemplate(templateId),
+          template: createBuilderTemplate(templateId, hasPdf ? undefined : { name: "" }),
           extractionSummary: null,
           stepLabels,
         })

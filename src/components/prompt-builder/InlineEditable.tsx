@@ -5,12 +5,15 @@ import {
   useIsAdminPreview,
 } from "@/hooks/use-builder-editor-mode"
 import {
-  findVariableTriggerStart,
+  findBraceTriggerInEditor,
   getCaretCharacterOffsetWithin,
+  getEditableSerializedText,
+  replaceBraceWithVariableAtSelection,
   setCaretCharacterOffsetWithin,
 } from "@/lib/caret-utils"
 import { normalizeVariableKey } from "@/lib/derive-template-variables"
-import { toEditableHtml, toPlainText } from "@/lib/rich-text"
+import { mergeFieldToken, readSerializedEditorValue } from "@/lib/merge-field-html"
+import { toEditableHtml } from "@/lib/rich-text"
 import { useTextFormattingStore } from "@/store/text-formatting-store"
 import {
   useCallback,
@@ -43,6 +46,8 @@ type Props = {
   hoverAffordance?: boolean
   /** Multiline width — hug intrinsic text width or fill the parent row */
   width?: "full" | "hug"
+  /** `manual` — line breaks only on Enter; `wrap` — soft-wrap at container edge */
+  lineBreaks?: "wrap" | "manual"
   /** Enable `{` / `{ }` variable picker while typing */
   enableVariablePicker?: boolean
   /** Show formatting toolbar while this field is focused */
@@ -59,6 +64,7 @@ export function InlineEditable({
   readOnly,
   hoverAffordance = true,
   width = "full",
+  lineBreaks = "wrap",
   enableVariablePicker = true,
   enableFormatting = true,
 }: Props) {
@@ -72,7 +78,10 @@ export function InlineEditable({
   const toolbarRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const blurTimerRef = useRef<number | null>(null)
+  const pickerBlurTimerRef = useRef<number | null>(null)
   const triggerStartRef = useRef<number | null>(null)
+  const pickerOpenRef = useRef(false)
+  const pendingBraceOpenRef = useRef(false)
   const [isFocused, setIsFocused] = useState(false)
   const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(
     null,
@@ -81,11 +90,24 @@ export function InlineEditable({
   const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 })
 
   useEffect(() => {
-    if (isReadOnly || !ref.current) return
-    const html = toEditableHtml(value)
-    if (ref.current.innerHTML !== html) {
-      ref.current.innerHTML = html
+    return () => {
+      if (pickerBlurTimerRef.current !== null) {
+        window.clearTimeout(pickerBlurTimerRef.current)
+      }
     }
+  }, [])
+
+  useEffect(() => {
+    pickerOpenRef.current = pickerOpen
+  }, [pickerOpen])
+
+  useEffect(() => {
+    if (isReadOnly || !ref.current) return
+    const el = ref.current
+    const active = document.activeElement
+    if (el === active || el.contains(active) || pickerOpenRef.current) return
+    if (readSerializedEditorValue(el) === value) return
+    el.innerHTML = toEditableHtml(value)
   }, [value, isReadOnly])
 
   const updateToolbarPos = useCallback(() => {
@@ -140,31 +162,53 @@ export function InlineEditable({
     const range = selection.getRangeAt(0)
     if (!ref.current.contains(range.startContainer)) return
 
-    const rect = range.getBoundingClientRect()
+    const caretRect = range.getBoundingClientRect()
+    const fallbackRect = ref.current.getBoundingClientRect()
+    const hasCaretBox = caretRect.width > 0 || caretRect.height > 0
     setPickerPos({
-      top: rect.bottom + window.scrollY + 4,
-      left: rect.left + window.scrollX,
+      top: (hasCaretBox ? caretRect.bottom : fallbackRect.bottom) + 4,
+      left: hasCaretBox ? caretRect.left : fallbackRect.left,
     })
   }, [])
 
-  const tryOpenVariablePicker = useCallback(() => {
+  useLayoutEffect(() => {
+    if (pickerOpen) {
+      updatePickerPosition()
+    }
+  }, [pickerOpen, updatePickerPosition])
+
+  const tryOpenVariablePicker = useCallback((skipCloseIfPending = false) => {
     if (!enableVariablePicker || isReadOnly || !ref.current) return
 
-    const caret = getCaretCharacterOffsetWithin(ref.current)
-    const text = toPlainText(ref.current.innerHTML)
-    const triggerStart = findVariableTriggerStart(text, caret)
-    if (triggerStart === null) {
+    const trigger = findBraceTriggerInEditor(ref.current)
+    if (trigger === null) {
+      if (skipCloseIfPending && pendingBraceOpenRef.current) {
+        pendingBraceOpenRef.current = false
+        return
+      }
       setPickerOpen(false)
       triggerStartRef.current = null
       return
     }
 
-    triggerStartRef.current = triggerStart
+    pendingBraceOpenRef.current = false
+    triggerStartRef.current = trigger.plainTextStart
     updatePickerPosition()
     setPickerOpen(true)
   }, [enableVariablePicker, isReadOnly, updatePickerPosition])
 
+  /** Open immediately on `{` keydown — before the character lands in the DOM. */
+  const openVariablePickerForBrace = useCallback(() => {
+    if (!enableVariablePicker || isReadOnly || !ref.current) return
+    triggerStartRef.current = getCaretCharacterOffsetWithin(ref.current)
+    pendingBraceOpenRef.current = true
+    updatePickerPosition()
+    pickerOpenRef.current = true
+    setPickerOpen(true)
+  }, [enableVariablePicker, isReadOnly, updatePickerPosition])
+
   const closePicker = useCallback(() => {
+    pendingBraceOpenRef.current = false
     setPickerOpen(false)
     triggerStartRef.current = null
   }, [])
@@ -172,20 +216,29 @@ export function InlineEditable({
   const handleVariableSelect = useCallback(
     (key: string) => {
       const el = ref.current
-      const triggerStart = triggerStartRef.current
-      if (!el || triggerStart === null) return
+      if (!el) return
 
-      const normalizedKey = normalizeVariableKey(key)
-      const text = toPlainText(el.innerHTML)
+      const token = mergeFieldToken(normalizeVariableKey(key))
+
+      if (replaceBraceWithVariableAtSelection(el, token)) {
+        const serialized = readSerializedEditorValue(el)
+        el.innerHTML = toEditableHtml(serialized)
+        onChange(serialized)
+        closePicker()
+        return
+      }
+
+      const triggerStart = triggerStartRef.current
+      if (triggerStart === null) return
+
+      const text = getEditableSerializedText(el)
       const caret = getCaretCharacterOffsetWithin(el)
-      const insertion = `{{${normalizedKey}}}`
-      const nextText =
-        text.slice(0, triggerStart) + insertion + text.slice(caret)
+      const nextText = text.slice(0, triggerStart) + token + text.slice(caret)
 
       el.innerHTML = toEditableHtml(nextText)
-      onChange(el.innerHTML)
+      onChange(nextText)
 
-      const nextCaret = triggerStart + insertion.length
+      const nextCaret = triggerStart + token.length
       requestAnimationFrame(() => {
         el.focus()
         setCaretCharacterOffsetWithin(el, nextCaret)
@@ -204,18 +257,22 @@ export function InlineEditable({
       if (ref.current?.contains(target) || menuRef.current?.contains(target)) {
         return
       }
+      if (ref.current) onChange(readSerializedEditorValue(ref.current))
       closePicker()
     }
 
     document.addEventListener("mousedown", onPointerDown)
     return () => document.removeEventListener("mousedown", onPointerDown)
-  }, [closePicker, pickerOpen])
+  }, [closePicker, onChange, pickerOpen])
 
   const shouldKeepFocus = (relatedTarget: EventTarget | null) => {
     const related = relatedTarget as Node | null
     if (!related) return false
     if (menuRef.current?.contains(related)) return true
     if (toolbarRef.current?.contains(related)) return true
+    if (related instanceof HTMLElement && related.closest("[data-variable-picker]")) {
+      return true
+    }
     if (related instanceof HTMLElement && related.closest("[data-formatting-toolbar]")) {
       return true
     }
@@ -223,6 +280,43 @@ export function InlineEditable({
       return true
     }
     return false
+  }
+
+  const isFocusInsidePicker = () => {
+    const active = document.activeElement
+    if (!active) return false
+    return Boolean(
+      menuRef.current?.contains(active) ||
+        (active instanceof HTMLElement && active.closest("[data-variable-picker]")),
+    )
+  }
+
+  const handleEditorBlur = (el: HTMLDivElement) => {
+    if (pickerBlurTimerRef.current !== null) {
+      window.clearTimeout(pickerBlurTimerRef.current)
+    }
+
+    pickerBlurTimerRef.current = window.setTimeout(() => {
+      pickerBlurTimerRef.current = null
+      const active = document.activeElement
+
+      if (el === active || el.contains(active)) return
+      if (shouldKeepFocus(active)) return
+      if (isFocusInsidePicker()) return
+      if (toolbarRef.current?.contains(active)) return
+      if (
+        active instanceof HTMLElement &&
+        active.closest("[data-formatting-toolbar]")
+      ) {
+        return
+      }
+
+      if (pickerOpenRef.current) return
+
+      onChange(readSerializedEditorValue(el))
+      closePicker()
+      scheduleDeactivate()
+    }, 50)
   }
 
   const scheduleDeactivate = () => {
@@ -244,6 +338,15 @@ export function InlineEditable({
     }, 0)
   }
 
+  const whitespaceClass =
+    multiline && lineBreaks === "manual"
+      ? "whitespace-pre"
+      : multiline
+        ? "whitespace-pre-wrap"
+        : "whitespace-nowrap"
+
+  const editCursorClass = "cursor-text"
+
   if (isReadOnly) {
     if (!value && placeholder) {
       return (
@@ -252,7 +355,7 @@ export function InlineEditable({
     }
     return (
       <span
-        className={`${multiline ? "whitespace-pre-wrap" : "whitespace-nowrap"} [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 ${className}`}
+        className={`${whitespaceClass} [&_.inline-merge-field]:mx-0.5 [&_.merge-field-sample]:text-inherit [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 ${className}`}
         dangerouslySetInnerHTML={{ __html: toEditableHtml(value) }}
       />
     )
@@ -261,24 +364,26 @@ export function InlineEditable({
   const editableAffordance = !hoverAffordance
     ? width === "full"
       ? multiline
-        ? "block w-full min-w-0 outline-none focus:rounded focus:bg-blue-50/50 focus:ring-1 focus:ring-blue-200"
-        : "block w-full min-w-0 whitespace-nowrap outline-none focus:rounded focus:bg-blue-50/50 focus:ring-1 focus:ring-blue-200"
-      : "whitespace-nowrap outline-none focus:rounded focus:bg-blue-50/50 focus:ring-1 focus:ring-blue-200"
+        ? `block w-full min-w-0 outline-none focus:rounded focus:bg-blue-50/50 focus:ring-1 focus:ring-blue-200 ${editCursorClass}`
+        : `block w-full min-w-0 whitespace-nowrap outline-none focus:rounded focus:bg-blue-50/50 focus:ring-1 focus:ring-blue-200 ${editCursorClass}`
+      : `whitespace-nowrap outline-none focus:rounded focus:bg-blue-50/50 focus:ring-1 focus:ring-blue-200 ${editCursorClass}`
     : multiline
       ? width === "hug"
-        ? "inline-block w-max max-w-full shrink-0 cursor-text rounded px-1 -mx-1 align-top whitespace-pre-wrap outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200"
-        : "block w-full cursor-text rounded px-1 -mx-1 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 whitespace-pre-wrap"
+        ? `inline-block w-max max-w-full shrink-0 rounded px-1 -mx-1 align-top ${whitespaceClass} outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 ${editCursorClass}`
+        : `block w-full rounded px-1 -mx-1 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 ${whitespaceClass} ${editCursorClass}`
       : width === "full"
-        ? "block w-full min-w-0 cursor-text whitespace-nowrap rounded px-0.5 -mx-0.5 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 empty:min-w-[2ch]"
-        : "inline-block w-fit max-w-full shrink-0 cursor-text whitespace-nowrap rounded px-0.5 -mx-0.5 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 empty:min-w-[2ch]"
+        ? `block w-full min-w-0 whitespace-nowrap rounded px-0.5 -mx-0.5 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 empty:min-w-[2ch] ${editCursorClass}`
+        : `inline-block w-fit max-w-full shrink-0 whitespace-nowrap rounded px-0.5 -mx-0.5 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-blue-50/55 hover:ring-1 hover:ring-inset hover:ring-blue-200/80 focus:bg-blue-50/55 focus:ring-1 focus:ring-blue-200 empty:min-w-[2ch] ${editCursorClass}`
 
   const picker =
     pickerOpen &&
     createPortal(
       <div
         ref={menuRef}
+        data-variable-picker
         className="fixed z-[250]"
         style={{ top: pickerPos.top, left: pickerPos.left }}
+        onMouseDown={(e) => e.preventDefault()}
       >
         <VariableCatalogPicker
           title="Insert variable"
@@ -306,7 +411,7 @@ export function InlineEditable({
 
   return (
     <div
-      className={`relative ${
+      className={`relative ${editCursorClass} ${
         width === "full" ? "min-w-0 w-full" : "w-max max-w-full shrink-0"
       }`}
     >
@@ -330,14 +435,20 @@ export function InlineEditable({
         onFocus={activateFormatting}
         onBlur={(e) => {
           if (shouldKeepFocus(e.relatedTarget)) return
-          onChange(e.currentTarget.innerHTML)
-          closePicker()
-          scheduleDeactivate()
+          handleEditorBlur(e.currentTarget)
+        }}
+        onBeforeInput={(e) => {
+          if (enableVariablePicker && !isReadOnly && e.data === "{") {
+            openVariablePickerForBrace()
+          }
         }}
         onInput={() => {
-          tryOpenVariablePicker()
+          requestAnimationFrame(() => {
+            tryOpenVariablePicker(true)
+          })
         }}
         onKeyDown={(e) => {
+          e.stopPropagation()
           if (e.key === "Escape" && pickerOpen) {
             e.preventDefault()
             closePicker()
@@ -351,11 +462,15 @@ export function InlineEditable({
             return
           }
 
-          if (e.key === "{") {
-            requestAnimationFrame(() => tryOpenVariablePicker())
+          if (
+            e.key === "{" ||
+            (e.key === "[" && e.shiftKey) ||
+            (e.code === "BracketLeft" && e.shiftKey)
+          ) {
+            openVariablePickerForBrace()
           }
         }}
-        className={`${editableAffordance} [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 empty:before:text-gray-300 empty:before:content-[attr(data-placeholder)] ${className}`}
+        className={`${editableAffordance} [&_.inline-merge-field]:mx-0.5 [&_.merge-field-sample]:text-inherit [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 empty:before:text-gray-300 empty:before:content-[attr(data-placeholder)] ${className}`}
       />
       {picker}
       {formattingToolbar}

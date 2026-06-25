@@ -84,8 +84,8 @@ function deriveNameFromFileName(fileName: string): string {
 
 export function deriveTemplateNameFromFiles(files: { name: string }[]): string {
   const fileName = files.find((file) => file.name.trim().length > 0)?.name
-  if (fileName) return deriveNameFromFileName(fileName)
-  return DEFAULT_QUOTE_TEMPLATE_NAME
+  if (!fileName) return ""
+  return deriveNameFromFileName(fileName)
 }
 
 export function deriveTemplateName(context: CreationContext): string {
@@ -95,7 +95,7 @@ export function deriveTemplateName(context: CreationContext): string {
   const fileName = context.uploadedFileNames?.find((name) => name.trim().length > 0)
   if (fileName) return deriveNameFromFileName(fileName)
 
-  return DEFAULT_QUOTE_TEMPLATE_NAME
+  return ""
 }
 
 export function applyCreationContextToTemplate(

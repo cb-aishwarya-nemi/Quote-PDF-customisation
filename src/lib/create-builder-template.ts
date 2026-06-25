@@ -19,7 +19,7 @@ import type { BlockType } from "@/types/template"
 const VARIANT_TO_BUILDER: Partial<Record<BlockType, BuilderBlockType>> = {
   quote_details: "contract_details",
   billed_to: "billed_to",
-  company_details: "contract_details",
+  company_details: "company_details",
   tcv_billing: "tcv_summary",
   pricing: "pricing",
   signature: "signature",
@@ -81,7 +81,7 @@ function defaultContent(type: BuilderBlockType): Record<string, unknown> {
         companyName: "Acme Software Inc.",
         logoDisplayCondition: null,
       }
-    case "company_address":
+    case "company_details":
       return {
         sectionLabel: "From",
         name: "Acme Software Inc.",
@@ -267,9 +267,14 @@ function mapVariantBlocks(types: BlockType[]): BuilderBlock[] {
 
 /** Stationery first; strip unsupported blocks and legacy images above stationery. */
 export function normalizeBuilderBlocks(blocks: BuilderBlock[]): BuilderBlock[] {
-  const filtered = blocks.filter((block) => block.type !== "quote_summary_header")
+  const migrated = blocks.map((block) =>
+    (block.type as string) === "company_address"
+      ? { ...block, type: "company_details" as const }
+      : block,
+  )
+  const filtered = migrated.filter((block) => block.type !== "quote_summary_header")
 
-  const STATIONERY: BuilderBlockType[] = ["company_logo", "company_address"]
+  const STATIONERY: BuilderBlockType[] = ["company_logo", "company_details"]
 
   const anchorIndex = filtered.findIndex((block) => STATIONERY.includes(block.type))
   const withoutLeadingImages =
@@ -332,6 +337,7 @@ export function createStandaloneBuilderBlock(
 }
 
 export const DEFAULT_QUOTE_TEMPLATE_NAME = "Standard business quote"
+export const TEMPLATE_NAME_PLACEHOLDER = "Your quote template name"
 
 export function createBlankBuilderTemplate(
   id: string,
@@ -339,7 +345,7 @@ export function createBlankBuilderTemplate(
 ): BuilderTemplate {
   return {
     id,
-    name: options?.name ?? "Untitled template",
+    name: options?.name ?? "",
     displayCondition: null,
     documentFooter: { ...DEFAULT_DOCUMENT_FOOTER },
     blocks: [],
@@ -376,7 +382,7 @@ export function createBuilderTemplate(
   } else {
     blocks = [
       createBuilderBlock("company_logo", 0),
-      createBuilderBlock("company_address", 1),
+      createBuilderBlock("company_details", 1),
       createBuilderBlock("tcv_summary", 2),
       createBuilderBlock("billed_to", 3),
       createBuilderBlock("contract_details", 4),

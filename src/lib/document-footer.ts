@@ -17,10 +17,10 @@ const QUOTE_PRINTABLE_HEIGHT_PX =
 
 export const DEFAULT_DOCUMENT_FOOTER: DocumentFooterConfig = {
   showPageNumber: true,
-  showQuoteNumber: true,
+  showQuoteNumber: false,
   showCustomerName: true,
   quotePageCount: 1,
-  quoteNumber: "QT-2026-0142",
+  quoteNumber: "",
   customerName: "Acme Corp",
 }
 
@@ -66,7 +66,7 @@ function estimateBlockPrintHeight(block: BuilderBlock): number {
   switch (block.type) {
     case "company_logo":
       return base + 80
-    case "company_address":
+    case "company_details":
     case "billed_to":
     case "quote_summary_header":
     case "contract_details":

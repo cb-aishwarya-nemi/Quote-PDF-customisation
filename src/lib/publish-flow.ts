@@ -1,0 +1,1 @@
+export const PUBLISH_INTERSTITIAL_MS = 1200

@@ -49,7 +49,7 @@ export function VariantPreviewThumb({ blockType, variantId, selected }: Props) {
     )
   }
 
-  if (blockType === "company_address") {
+  if (blockType === "company_details") {
     if (variantId === "compact") {
       return (
         <div className={`${shell} justify-center gap-0.5`}>

@@ -4,26 +4,113 @@ import { ConditionalSegmentCard } from "@/components/prompt-builder/ConditionalS
 import { useCanEditBlockStructure, useIsPreviewMode } from "@/hooks/use-builder-editor-mode"
 import { staticLabel, DEFAULT_LABELS } from "@/lib/block-static-labels"
 import {
+  analyzeTermsConditionalOverlap,
   createConditionalTableSegment,
   createConditionalTextSegment,
   createTableSegment,
   createTextSegment,
+  findOverlappingTermsSegmentIds,
+  resolveTermsSegmentsForScenario,
+  TERMS_SEGMENT_DRAG_SOURCE,
 } from "@/lib/terms-segments"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import type { BuilderBlock, ConditionalSegment } from "@/types/prompt-builder"
-import { segmentMatches } from "@/types/prompt-builder"
-import { GitBranch, Plus, Table2 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { PREVIEW_SCENARIOS } from "@/types/prompt-builder"
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { GitBranch, GripVertical, Plus, Table2 } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 type Props = {
   block: BuilderBlock
   onField?: (field: string, value: string) => void
 }
 
+type SortableSegmentProps = {
+  blockId: string
+  segment: ConditionalSegment
+  canReorder: boolean
+  canRemove: boolean
+  dense: boolean
+  termsVariant: string
+  isOverlapping: boolean
+}
+
+function SortableTermsSegment({
+  blockId,
+  segment,
+  canReorder,
+  canRemove,
+  dense,
+  termsVariant,
+  isOverlapping,
+}: SortableSegmentProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: segment.id,
+    disabled: !canReorder,
+    data: {
+      source: TERMS_SEGMENT_DRAG_SOURCE,
+      blockId,
+    },
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-start gap-1 ${
+        isDragging ? "relative z-10 opacity-90" : ""
+      }`}
+    >
+      {canReorder && (
+        <button
+          type="button"
+          className="mt-1 flex size-5 shrink-0 cursor-grab touch-none items-center justify-center text-gray-300 opacity-0 transition-all hover:text-gray-600 active:cursor-grabbing group-hover/terms-segments:opacity-100"
+          aria-label="Drag to reorder"
+          onClick={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3.5" />
+        </button>
+      )}
+      <div className="min-w-0 flex-1">
+        <ConditionalSegmentCard
+          blockId={blockId}
+          segment={segment}
+          canRemove={canRemove}
+          dense={dense}
+          termsVariant={termsVariant}
+          isOverlapping={isOverlapping}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function TermsBlockView({ block, onField }: Props) {
   const isPreview = useIsPreviewMode()
   const canEditStructure = useCanEditBlockStructure()
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
+  const ignoredValidationIssueIds = usePromptBuilderStore(
+    (s) => s.ignoredValidationIssueIds,
+  )
   const updateBlockField = usePromptBuilderStore((s) => s.updateBlockField)
   const setField = onField ?? ((field, value) => updateBlockField(block.id, field, value))
 
@@ -32,9 +119,21 @@ export function TermsBlockView({ block, onField }: Props) {
   const isTableVariant = blockVariant === "table"
   const allSegments = (c.segments as ConditionalSegment[]) ?? []
   const segments = isPreview
-    ? allSegments.filter((seg) => segmentMatches(seg, activeScenario))
+    ? resolveTermsSegmentsForScenario(allSegments, activeScenario)
     : allSegments
   const sectionLabel = staticLabel(c, "sectionLabel", DEFAULT_LABELS.terms.sectionLabel)
+  const canReorderSegments =
+    canEditStructure && !isPreview && allSegments.length > 1
+
+  const overlappingSegmentIds = useMemo(() => {
+    if (isPreview) return new Set<string>()
+    if (ignoredValidationIssueIds.includes("terms-conditional-overlap")) {
+      return new Set<string>()
+    }
+    const overlap = analyzeTermsConditionalOverlap(allSegments, PREVIEW_SCENARIOS)
+    if (!overlap.hasOverlap) return new Set<string>()
+    return findOverlappingTermsSegmentIds(allSegments, PREVIEW_SCENARIOS)
+  }, [allSegments, ignoredValidationIssueIds, isPreview])
 
   const addSegment = usePromptBuilderStore((s) => s.addSegment)
   const [addOpen, setAddOpen] = useState(false)
@@ -55,6 +154,23 @@ export function TermsBlockView({ block, onField }: Props) {
     addSegment(block.id, segment)
     setAddOpen(false)
   }
+
+  const segmentList = (
+    <div className="group/terms-segments space-y-3">
+      {segments.map((seg) => (
+        <SortableTermsSegment
+          key={seg.id}
+          blockId={block.id}
+          segment={seg}
+          canReorder={canReorderSegments}
+          canRemove={allSegments.length > 1}
+          dense={!isTableVariant}
+          termsVariant={blockVariant}
+          isOverlapping={overlappingSegmentIds.has(seg.id)}
+        />
+      ))}
+    </div>
+  )
 
   return (
     <div className="w-full min-w-0 space-y-2">
@@ -98,19 +214,15 @@ export function TermsBlockView({ block, onField }: Props) {
             </>
           )}
         </div>
+      ) : canReorderSegments ? (
+        <SortableContext
+          items={allSegments.map((seg) => seg.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {segmentList}
+        </SortableContext>
       ) : (
-        <div className="space-y-3">
-          {segments.map((seg) => (
-            <ConditionalSegmentCard
-              key={seg.id}
-              blockId={block.id}
-              segment={seg}
-              canRemove={allSegments.length > 1}
-              dense={!isTableVariant}
-              termsVariant={blockVariant}
-            />
-          ))}
-        </div>
+        segmentList
       )}
 
       {canEditStructure && (

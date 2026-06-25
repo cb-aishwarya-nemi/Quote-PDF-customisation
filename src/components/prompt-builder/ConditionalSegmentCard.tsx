@@ -30,6 +30,8 @@ type Props = {
   dense?: boolean
   /** When the T&C block uses the table variant, text segments render as tables. */
   termsVariant?: string
+  /** Subtle highlight when this clause competes with another conditional clause. */
+  isOverlapping?: boolean
 }
 
 function SegmentChrome({
@@ -41,6 +43,7 @@ function SegmentChrome({
   condition,
   setCondition,
   showConditionBanner = true,
+  isOverlapping = false,
   children,
 }: {
   blockId: string
@@ -51,6 +54,7 @@ function SegmentChrome({
   condition: BlockDisplayCondition
   setCondition: (next: BlockDisplayCondition) => void
   showConditionBanner?: boolean
+  isOverlapping?: boolean
   children: React.ReactNode
 }) {
   const canEditStructure = useCanEditBlockStructure()
@@ -71,9 +75,22 @@ function SegmentChrome({
 
   return (
     <div
-      className={`group/segment relative w-full min-w-0 rounded-lg border border-transparent px-1 py-1 transition-all hover:border-blue-300 hover:bg-white hover:shadow-[0_4px_16px_-4px_rgba(37,99,235,0.18)] hover:ring-1 hover:ring-blue-100 ${
-        isConditional ? "hover:border-amber-300 hover:ring-amber-100" : ""
+      className={`group/segment relative w-full min-w-0 rounded-lg border px-1 py-1 transition-all ${
+        isOverlapping
+          ? "border-amber-200/80 bg-amber-50/45 ring-1 ring-inset ring-amber-100/90"
+          : "border-transparent"
+      } hover:border-blue-300 hover:bg-white hover:shadow-[0_4px_16px_-4px_rgba(37,99,235,0.18)] hover:ring-1 hover:ring-blue-100 ${
+        isConditional && !isOverlapping
+          ? "hover:border-amber-300 hover:ring-amber-100"
+          : isConditional
+            ? "hover:border-amber-300/90 hover:bg-amber-50/60 hover:ring-amber-100"
+            : ""
       }`}
+      title={
+        isOverlapping
+          ? "Competes with another conditional clause — first match in list order wins"
+          : undefined
+      }
     >
       {canEditStructure && (
         <div
@@ -161,6 +178,7 @@ export function ConditionalSegmentCard({
   canRemove,
   dense = true,
   termsVariant = "dense",
+  isOverlapping = false,
 }: Props) {
   const isPreview = useIsPreviewMode()
   const isAdminPreview = useIsAdminPreview()
@@ -249,6 +267,7 @@ export function ConditionalSegmentCard({
       condition={condition}
       setCondition={setCondition}
       showConditionBanner={isTable}
+      isOverlapping={isOverlapping}
     >
       {isTable && tableSegment ? (
         <EditableDataTable

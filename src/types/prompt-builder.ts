@@ -21,7 +21,7 @@ export type TemplateVariable = {
 
 export type BuilderBlockType =
   | "company_logo"
-  | "company_address"
+  | "company_details"
   | "quote_summary_header"
   | "tcv_summary"
   | "billed_to"
@@ -120,17 +120,19 @@ export type BuilderTemplate = {
   /** Order of page ids (custom page ids + quote) */
   pageOrder?: TemplatePageId[]
   blocks: BuilderBlock[]
-  /** Printed document footer — page numbers, quote #, customer */
+  /** Printed document footer — page numbers, quote-for-customer line */
   documentFooter?: DocumentFooterConfig
 }
 
 export type DocumentFooterConfig = {
   showPageNumber?: boolean
+  /** @deprecated No longer shown in footer — use showCustomerName ("Quote for …") */
   showQuoteNumber?: boolean
+  /** When true, shows "Quote for {customer name}" */
   showCustomerName?: boolean
   /** Printed pages the quote section spans (for `3-5/5` style). */
   quotePageCount?: number
-  /** Fallback when no quote summary block is on the template */
+  /** @deprecated Footer no longer shows quote number */
   quoteNumber?: string
   customerName?: string
 }
@@ -141,11 +143,14 @@ export type PreviewScenario = {
   values: Record<string, string>
 }
 
+export type ChatMessageKind = "text" | "publish_checklist"
+
 export type ChatMessage = {
   id: string
   role: "user" | "assistant"
   content: string
   timestamp: string
+  kind?: ChatMessageKind
 }
 
 export type DealType = "new_business" | "expansion" | "amendment" | "termination"

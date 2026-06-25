@@ -49,6 +49,18 @@ export function PublishedTemplateCard({
 
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!highlighted) return
+    const frame = window.requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [highlighted])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -68,6 +80,7 @@ export function PublishedTemplateCard({
 
   return (
     <article
+      ref={cardRef}
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -79,7 +92,7 @@ export function PublishedTemplateCard({
       }}
       className={`group/card relative flex aspect-[1.586/1] w-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-xl border bg-white text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-blue-200/80 hover:shadow-[0_16px_40px_-12px_rgba(37,99,235,0.22)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
         highlighted
-          ? "border-blue-300 ring-2 ring-blue-100"
+          ? "animate-template-highlight border-blue-400 shadow-[0_0_0_4px_rgba(59,130,246,0.12)] ring-2 ring-blue-200"
           : "border-gray-200/90"
       }`}
     >

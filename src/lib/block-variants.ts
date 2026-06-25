@@ -28,16 +28,16 @@ export const BLOCK_VARIANTS: Record<BuilderBlockType, BlockVariantOption[]> = {
       description: "28px icon size",
     },
   ],
-  company_address: [
+  company_details: [
     {
       id: "standard",
       label: "Standard",
-      description: "Company name, address, and tax details",
+      description: "From address with company name and tax details",
     },
     {
       id: "compact",
       label: "Compact",
-      description: "Single-line name and address",
+      description: "Single-line From address",
     },
   ],
   quote_summary_header: [
@@ -262,7 +262,7 @@ export type AddableBlockEntry = {
 
 export const ADDABLE_BLOCKS: AddableBlockEntry[] = [
   { type: "company_logo", label: "Company logo", group: "standard" },
-  { type: "company_address", label: "Company address", group: "standard" },
+  { type: "company_details", label: "Company details", group: "standard" },
   { type: "tcv_summary", label: "TCV summary", group: "standard" },
   { type: "billed_to", label: "Billed to", group: "standard" },
   { type: "contract_details", label: "Contract details", group: "standard" },

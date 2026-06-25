@@ -1,10 +1,16 @@
 import { INLINE_FRAGMENT_DRAG_SOURCE } from "@/lib/content-fragments"
+import { TERMS_SEGMENT_DRAG_SOURCE } from "@/lib/terms-segments"
 import {
   closestCenter,
   pointerWithin,
   rectIntersection,
   type CollisionDetection,
 } from "@dnd-kit/core"
+
+const NESTED_BLOCK_DRAG_SOURCES = new Set<string>([
+  INLINE_FRAGMENT_DRAG_SOURCE,
+  TERMS_SEGMENT_DRAG_SOURCE,
+])
 
 const COLUMN_DROP_PREFIX = "col:"
 
@@ -22,20 +28,17 @@ function columnSlotCollisions(
   )
 }
 
-/** Keeps block drags on blocks and inline-fragment drags within the same block. */
+/** Keeps block drags on blocks and nested drags within the same block. */
 export const canvasCollisionDetection: CollisionDetection = (args) => {
   const activeSource = args.active.data.current?.source
 
-  if (activeSource === INLINE_FRAGMENT_DRAG_SOURCE) {
+  if (activeSource && NESTED_BLOCK_DRAG_SOURCES.has(activeSource)) {
     const blockId = args.active.data.current?.blockId
     return closestCenter({
       ...args,
       droppableContainers: args.droppableContainers.filter((container) => {
         const data = container.data.current
-        return (
-          data?.source === INLINE_FRAGMENT_DRAG_SOURCE &&
-          data?.blockId === blockId
-        )
+        return data?.source === activeSource && data?.blockId === blockId
       }),
     })
   }
@@ -43,7 +46,7 @@ export const canvasCollisionDetection: CollisionDetection = (args) => {
   const eligible = args.droppableContainers.filter(
     (container) =>
       container.id !== args.active.id &&
-      container.data.current?.source !== INLINE_FRAGMENT_DRAG_SOURCE,
+      !NESTED_BLOCK_DRAG_SOURCES.has(container.data.current?.source ?? ""),
   )
 
   const columnSlots = eligible.filter((container) => isColumnDropId(container.id))

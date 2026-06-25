@@ -1,7 +1,12 @@
 import {
   findBlockIndex,
 } from "@/lib/block-layout-helpers"
-import type { BuilderBlock, BuilderTemplate } from "@/types/prompt-builder"
+import {
+  analyzeTermsConditionalOverlap,
+  describeTermsConditionalOverlapMessage,
+} from "@/lib/terms-segments"
+import type { BuilderBlock, BuilderTemplate, ConditionalSegment } from "@/types/prompt-builder"
+import { PREVIEW_SCENARIOS } from "@/types/prompt-builder"
 
 export type TemplateValidationIssue = {
   id: string
@@ -108,6 +113,24 @@ export function deriveTemplateValidationIssues(
         prompt: "Move terms and conditions after pricing",
       },
     })
+  }
+
+  if (termsIndex >= 0) {
+    const termsBlock = blocks[termsIndex]
+    const segments = (termsBlock.content.segments as ConditionalSegment[]) ?? []
+    const overlap = analyzeTermsConditionalOverlap(segments, PREVIEW_SCENARIOS)
+    if (overlap.hasOverlap) {
+      pushIssue(issues, {
+        id: "terms-conditional-overlap",
+        severity: "warning",
+        message: describeTermsConditionalOverlapMessage(overlap),
+        blockId: termsBlock.id,
+        action: {
+          label: "Review clause order",
+          prompt: "Help me fix overlapping conditional terms clauses",
+        },
+      })
+    }
   }
 
   if (signatureIndex === -1) {
@@ -250,6 +273,15 @@ export function deriveLayoutVisualHints(
           addBlockHint(blockHints, blocks[termsIndex].id, {
             issueId: issue.id,
             canvasMessage: "Terms usually follow pricing",
+          })
+        }
+        break
+      }
+      case "terms-conditional-overlap": {
+        if (issue.blockId) {
+          addBlockHint(blockHints, issue.blockId, {
+            issueId: issue.id,
+            canvasMessage: "Overlapping conditions — first match wins",
           })
         }
         break

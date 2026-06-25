@@ -1,3 +1,5 @@
+import { derivePublishChecklist, publishChecklistCanPublish } from "@/lib/publish-checklist"
+import { PUBLISH_INTERSTITIAL_MS } from "@/lib/publish-flow"
 import { createId } from "@/lib/create-id"
 import { flushBuilderAutosave } from "@/lib/builder-autosave"
 import { normalizeDocumentFooter } from "@/lib/document-footer"
@@ -66,6 +68,8 @@ import {
 } from "@/lib/template-generation-steps"
 import {
   applyTermsVariantToSegments,
+  analyzeTermsConditionalOverlap,
+  describeTermsConditionalOverlapMessage,
 } from "@/lib/terms-segments"
 import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
 import {
@@ -89,6 +93,7 @@ import type {
 import { PREVIEW_SCENARIOS } from "@/types/prompt-builder"
 import { arrayMove } from "@dnd-kit/sortable"
 import { create } from "zustand"
+import { useTemplateLibraryStore, type PublishedBuilderTemplate } from "@/store/template-library-store"
 
 export type BuilderEditorMode = "edit" | "preview" | "sales"
 export type PreviewPersona = "admin" | "sales"
@@ -392,8 +397,20 @@ type PromptBuilderStore = {
   ) => void
   addSegment: (blockId: string, segment: ConditionalSegment) => void
   removeSegment: (blockId: string, segmentId: string) => void
+  reorderSegments: (
+    blockId: string,
+    activeSegmentId: string,
+    overSegmentId: string,
+  ) => void
   ignoreValidationIssue: (issueId: string) => void
   sendMessage: (text: string) => void
+  assistantExpandTick: number
+  publishingTemplateName: string | null
+  requestPublish: () => void
+  confirmPublish: () => PublishedBuilderTemplate | null
+  publishTemplate: (
+    onComplete: (result: PublishedBuilderTemplate | null) => void,
+  ) => void
 }
 
 function agentReply(
@@ -417,6 +434,28 @@ function agentReply(
 
   const layoutFixReply = tryLayoutFixReply(lower, template, set)
   if (layoutFixReply) return layoutFixReply
+
+  if (
+    lower.includes("overlapping") &&
+    (lower.includes("terms") ||
+      lower.includes("conditional") ||
+      lower.includes("clause"))
+  ) {
+    const terms = findBlockByType(template, "terms")
+    if (!terms) {
+      return "Add a Terms & conditions block first, then add conditional clauses."
+    }
+
+    const segments = (terms.content.segments as ConditionalSegment[]) ?? []
+    const overlap = analyzeTermsConditionalOverlap(segments, PREVIEW_SCENARIOS)
+    set({ selectedBlockId: terms.id })
+
+    if (!overlap.hasOverlap) {
+      return "No overlapping conditional clauses right now. Drag segments to set priority if you add more — the first match wins."
+    }
+
+    return `${describeTermsConditionalOverlapMessage(overlap)}\n\nDrag segments in the Terms block to set priority. Narrow conditions so only the intended clause matches each scenario.`
+  }
 
   if (
     lower.includes("germany") &&
@@ -894,6 +933,8 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   isAgentTyping: false,
   ignoredValidationIssueIds: [],
   conditionStripHighlighted: false,
+  assistantExpandTick: 0,
+  publishingTemplateName: null,
   pendingImagePdfImport: null,
   pendingIntroPdfImport: null,
   activePageId: QUOTE_PAGE_ID,
@@ -1659,6 +1700,43 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       }
     }),
 
+  reorderSegments: (blockId, activeSegmentId, overSegmentId) =>
+    set((s) => {
+      if (!s.template || s.editorMode !== "edit") return s
+      const block = findTemplateBlock(s.template, blockId)
+      if (!block || block.type !== "terms") return s
+
+      const segments = (block.content.segments as ConditionalSegment[]) ?? []
+      const fromIndex = segments.findIndex((seg) => seg.id === activeSegmentId)
+      const toIndex = segments.findIndex((seg) => seg.id === overSegmentId)
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return s
+
+      const nextSegments = arrayMove(segments, fromIndex, toIndex)
+      const patchBlock = (b: BuilderBlock) =>
+        b.id === blockId
+          ? { ...b, content: { ...b.content, segments: nextSegments } }
+          : b
+
+      const quoteIndex = s.template.blocks.findIndex((b) => b.id === blockId)
+      if (quoteIndex >= 0) {
+        return {
+          template: {
+            ...s.template,
+            blocks: s.template.blocks.map(patchBlock),
+          },
+        }
+      }
+
+      const customPages = resolveCustomPages(s.template).map((page) => {
+        if (!page.blocks?.some((b) => b.id === blockId)) return page
+        return { ...page, blocks: page.blocks.map(patchBlock) }
+      })
+
+      return {
+        template: { ...s.template, customPages, introPage: undefined },
+      }
+    }),
+
   ignoreValidationIssue: (issueId) =>
     set((s) => ({
       ignoredValidationIssueIds: s.ignoredValidationIssueIds.includes(issueId)
@@ -1693,5 +1771,72 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
         isAgentTyping: false,
       }))
     }, delay)
+  },
+
+  requestPublish: () => {
+    const { template, messages } = get()
+    if (!template) return
+
+    useTemplateLibraryStore.getState().ensureInitialized()
+    const library = useTemplateLibraryStore.getState().publishedTemplates
+    const existing = library.find((entry) => entry.id === template.id)
+    const isRepublish = existing?.status === "published"
+
+    const now = new Date().toISOString()
+    const userMsg: ChatMessage = {
+      id: createId("msg"),
+      role: "user",
+      content: isRepublish
+        ? "Save and publish this template"
+        : "Publish this template",
+      timestamp: now,
+    }
+    const assistantMsg: ChatMessage = {
+      id: createId("msg"),
+      role: "assistant",
+      content: "",
+      timestamp: now,
+      kind: "publish_checklist",
+    }
+
+    set((s) => ({
+      messages: [...messages, userMsg, assistantMsg],
+      assistantExpandTick: s.assistantExpandTick + 1,
+    }))
+  },
+
+  confirmPublish: () => {
+    const { template, ignoredValidationIssueIds } = get()
+    if (!template) return null
+
+    useTemplateLibraryStore.getState().ensureInitialized()
+    const library = useTemplateLibraryStore.getState().publishedTemplates
+    const items = derivePublishChecklist({
+      template,
+      library,
+      ignoredValidationIssueIds,
+    })
+
+    if (!publishChecklistCanPublish(items)) return null
+
+    return useTemplateLibraryStore.getState().publishBuilderTemplate(template)
+  },
+
+  publishTemplate: (onComplete) => {
+    const { template } = get()
+    if (!template) {
+      onComplete(null)
+      return
+    }
+
+    const name = template.name.trim() || "Untitled template"
+    useTemplateLibraryStore.getState().ensureInitialized()
+    set({ publishingTemplateName: name })
+
+    window.setTimeout(() => {
+      const published = get().confirmPublish()
+      set({ publishingTemplateName: null })
+      onComplete(published)
+    }, PUBLISH_INTERSTITIAL_MS)
   },
 }))

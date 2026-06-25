@@ -2,7 +2,6 @@ import { PreviewExportActions } from "@/components/prompt-builder/PreviewExportA
 import { PreviewPersonaPicker } from "@/components/prompt-builder/PreviewPersonaPicker"
 import { PreviewScenarioPicker } from "@/components/prompt-builder/PreviewScenarioPicker"
 import { TemplateConditionStrip } from "@/components/prompt-builder/TemplateConditionStrip"
-import { TextFormattingBarInline } from "@/components/prompt-builder/TextFormattingBar"
 import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { Eye, Pencil } from "lucide-react"
@@ -120,7 +119,6 @@ export function CanvasInlineToolbar({
 
   return (
     <div ref={anchorRef} className="mb-4">
-      <TextFormattingBarInline />
       <CanvasToolbarRow
         documentRef={documentRef}
         suppressActions={suppressActions}

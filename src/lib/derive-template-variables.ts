@@ -17,9 +17,9 @@ type FieldDef = {
 export type { FieldDef as VariableFieldDef }
 
 const BLOCK_FIELD_DEFS: Partial<Record<BuilderBlockType, FieldDef[]>> = {
-  company_address: [
+  company_details: [
     { field: "name", key: "company.name", label: "Company name", category: "quote" },
-    { field: "address", key: "company.address", label: "Company address", category: "quote" },
+    { field: "address", key: "company.address", label: "From address", category: "quote" },
     { field: "taxId", key: "company.tax_id", label: "Tax ID", category: "quote" },
     { field: "entity", key: "company.entity", label: "Legal entity", category: "quote" },
   ],
@@ -199,7 +199,7 @@ function formatSample(value: unknown): string {
 
 const BLOCK_TYPE_LABELS: Record<BuilderBlockType, string> = {
   company_logo: "Company logo",
-  company_address: "Company address",
+  company_details: "Company details",
   quote_summary_header: "Quote summary",
   tcv_summary: "TCV summary",
   billed_to: "Billed to",

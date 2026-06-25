@@ -16,6 +16,8 @@ const CATEGORY_LABELS: Record<TemplateVariableCategory, string> = {
 type Props = {
   onSelect: (key: string, label: string) => void
   selectedKey?: string
+  /** When false, keep focus in the editor (used for `{` trigger). */
+  autoFocusSearch?: boolean
   title?: string
   className?: string
 }
@@ -25,6 +27,7 @@ export function VariableCatalogPicker({
   selectedKey,
   title = "Insert variable",
   className = "",
+  autoFocusSearch = false,
 }: Props) {
   const [searchQuery, setSearchQuery] = useState("")
   const searchRef = useRef<HTMLInputElement>(null)
@@ -58,11 +61,12 @@ export function VariableCatalogPicker({
   )
 
   useEffect(() => {
-    searchRef.current?.focus()
-  }, [])
+    if (autoFocusSearch) searchRef.current?.focus()
+  }, [autoFocusSearch])
 
   return (
     <div
+      data-variable-picker
       className={`w-[272px] rounded-lg border border-gray-200 bg-white shadow-lg ${className}`}
       role="dialog"
       aria-label={title}

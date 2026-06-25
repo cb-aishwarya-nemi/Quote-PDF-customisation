@@ -1,11 +1,16 @@
 import { AssistantMinimizeGlyph } from "@/components/common/AssistantMinimizeGlyph"
 import { AssistantProfileIcon } from "@/components/common/AssistantProfileIcon"
+import { PublishChecklistMessage } from "@/components/prompt-builder/PublishChecklistMessage"
 import { deriveAgentSuggestions } from "@/lib/derive-agent-suggestions"
+import { derivePublishChecklist } from "@/lib/publish-checklist"
 import { deriveTemplateValidationIssues } from "@/lib/template-validation"
+import { flushBuilderAutosave } from "@/hooks/use-builder-autosave"
 import { useEditorMode } from "@/hooks/use-builder-editor-mode"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
+import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { Lightbulb, Send } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 
 const ASSISTANT_COLLAPSED_KEY = "prompt-builder-assistant-collapsed"
 
@@ -18,6 +23,7 @@ function readCollapsedPreference(): boolean {
 }
 
 export function AgentChatPanel() {
+  const navigate = useNavigate()
   const template = usePromptBuilderStore((s) => s.template)
   const editorMode = useEditorMode()
   const selectedBlockId = usePromptBuilderStore((s) => s.selectedBlockId)
@@ -27,13 +33,41 @@ export function AgentChatPanel() {
   const ignoredValidationIssueIds = usePromptBuilderStore(
     (s) => s.ignoredValidationIssueIds,
   )
+  const assistantExpandTick = usePromptBuilderStore((s) => s.assistantExpandTick)
   const ignoreValidationIssue = usePromptBuilderStore(
     (s) => s.ignoreValidationIssue,
   )
   const sendMessage = usePromptBuilderStore((s) => s.sendMessage)
+  const highlightConditionStrip = usePromptBuilderStore(
+    (s) => s.highlightConditionStrip,
+  )
+  const publishedTemplates = useTemplateLibraryStore((s) => s.publishedTemplates)
+  const ensureInitialized = useTemplateLibraryStore((s) => s.ensureInitialized)
   const [input, setInput] = useState("")
   const [collapsed, setCollapsed] = useState(readCollapsedPreference)
+  const publishTemplate = usePromptBuilderStore((s) => s.publishTemplate)
+  const publishingTemplateName = usePromptBuilderStore(
+    (s) => s.publishingTemplateName,
+  )
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const publishChecklistItems = useMemo(() => {
+    if (!template) return []
+    return derivePublishChecklist({
+      template,
+      library: publishedTemplates,
+      ignoredValidationIssueIds,
+    })
+  }, [template, publishedTemplates, ignoredValidationIssueIds])
+
+  const latestPublishChecklistId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].kind === "publish_checklist") return messages[i].id
+    }
+    return null
+  }, [messages])
+
+  const inPublishChecklistStage = latestPublishChecklistId !== null
 
   const collapseAssistant = () => {
     setCollapsed(true)
@@ -53,6 +87,12 @@ export function AgentChatPanel() {
     }
   }
 
+  useEffect(() => {
+    if (assistantExpandTick > 0) {
+      expandAssistant()
+    }
+  }, [assistantExpandTick])
+
   const validationIssues = useMemo(
     () =>
       deriveTemplateValidationIssues(template).filter(
@@ -65,7 +105,13 @@ export function AgentChatPanel() {
     (issue) => !ignoredValidationIssueIds.includes(issue.id),
   )
 
-  const actionNeeded = editorMode === "edit" && visibleValidationIssues.length > 0
+  const hasPublishChecklistMessage = messages.some(
+    (msg) => msg.kind === "publish_checklist",
+  )
+  const actionNeeded =
+    editorMode === "edit" &&
+    visibleValidationIssues.length > 0 &&
+    !hasPublishChecklistMessage
 
   const suggestions = useMemo(
     () =>
@@ -80,7 +126,7 @@ export function AgentChatPanel() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, isAgentTyping])
+  }, [messages, isAgentTyping, publishChecklistItems])
 
   const handleSend = () => {
     const text = input.trim()
@@ -91,6 +137,32 @@ export function AgentChatPanel() {
 
   const handleIgnore = (issueId: string) => {
     ignoreValidationIssue(issueId)
+  }
+
+  const handleChecklistAction = (
+    action: NonNullable<
+      ReturnType<typeof derivePublishChecklist>[number]["action"]
+    >,
+  ) => {
+    if (action.type === "highlight-conditions") {
+      highlightConditionStrip()
+      return
+    }
+    if (action.prompt) {
+      sendMessage(action.prompt)
+    }
+  }
+
+  const handleConfirmPublish = () => {
+    ensureInitialized()
+    flushBuilderAutosave()
+    publishTemplate((published) => {
+      if (published) {
+        navigate("/templates", {
+          state: { highlightTemplateId: published.id, fromPublish: true },
+        })
+      }
+    })
   }
 
   if (collapsed) {
@@ -145,13 +217,25 @@ export function AgentChatPanel() {
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[90%] whitespace-pre-wrap rounded-lg px-3 py-2 text-[13px] leading-relaxed ${
+              className={`max-w-[90%] rounded-lg px-3 py-2 text-[13px] leading-relaxed ${
                 msg.role === "user"
                   ? "bg-blue-600 text-white"
                   : "bg-gray-100 text-gray-800"
-              }`}
+              } ${msg.kind === "publish_checklist" ? "w-full max-w-full" : ""}`}
             >
-              {msg.content}
+              {msg.content && msg.kind !== "publish_checklist" && (
+                <p>{msg.content}</p>
+              )}
+              {msg.kind === "publish_checklist" && (
+                <PublishChecklistMessage
+                  items={publishChecklistItems}
+                  animate={msg.id === latestPublishChecklistId}
+                  onAction={handleChecklistAction}
+                  onIgnore={handleIgnore}
+                  onPublish={handleConfirmPublish}
+                  isPublishing={!!publishingTemplateName && msg.id === latestPublishChecklistId}
+                />
+              )}
             </div>
           </div>
         ))}
@@ -198,7 +282,7 @@ export function AgentChatPanel() {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : !inPublishChecklistStage ? (
             <>
               <div className="mb-1.5 flex items-center gap-1.5">
                 <Lightbulb className="size-3 text-amber-500" />
@@ -220,7 +304,7 @@ export function AgentChatPanel() {
                 ))}
               </div>
             </>
-          )}
+          ) : null}
         </div>
         <div className="flex items-end gap-2">
           <textarea

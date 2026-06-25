@@ -257,7 +257,7 @@ function TextOverlayItem({
             <Trash2 className="size-3" />
           </button>
         </div>
-        <div ref={editableWrapRef}>
+        <div ref={editableWrapRef} className="cursor-text">
           <InlineEditable
             value={overlay.text}
             onChange={(text) => onChange({ text })}

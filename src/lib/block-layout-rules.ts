@@ -6,7 +6,7 @@ export type BlockWidthRule = "half_only" | "half_or_full" | "full_only"
 
 export const BLOCK_WIDTH_RULES: Record<BuilderBlockType, BlockWidthRule> = {
   company_logo: "half_only",
-  company_address: "half_only",
+  company_details: "half_only",
   quote_summary_header: "half_or_full",
   tcv_summary: "half_or_full",
   billed_to: "half_or_full",
@@ -24,7 +24,7 @@ export const BLOCK_WIDTH_RULES: Record<BuilderBlockType, BlockWidthRule> = {
 /** Merge-field / content reference for docs and tooling. */
 export const BLOCK_LAYOUT_ATTRIBUTES: Record<BuilderBlockType, string> = {
   company_logo: "Logo / image",
-  company_address: "Address lines (org address from business profile)",
+  company_details: "From address (organization address from business profile)",
   quote_summary_header:
     "Quote number, quote date, expiry date, customer id, payment terms",
   tcv_summary: "TC value, billing cycles, first billing amount",
@@ -88,16 +88,16 @@ export function canBlocksFormPair(
   const leftColumn = String(left.content.layoutColumn ?? "full")
   if (leftColumn === "right") return false
 
-  if (left.type === "company_logo" && rightType !== "company_address") {
+  if (left.type === "company_logo" && rightType !== "company_details") {
     return false
   }
-  if (rightType === "company_address" && left.type !== "company_logo") {
+  if (rightType === "company_details" && left.type !== "company_logo") {
     return false
   }
-  if (left.type === "company_address") {
+  if (left.type === "company_details") {
     return (
       rightType !== "company_logo" &&
-      rightType !== "company_address" &&
+      rightType !== "company_details" &&
       blockAllowsHalfWidth(rightType)
     )
   }
@@ -112,6 +112,6 @@ export function widthLabelForBlock(block: BuilderBlock): "50%" | "100%" {
 export function defaultLayoutColumnForType(type: BuilderBlockType): LayoutColumn {
   if (blockRequiresFullWidth(type)) return "full"
   if (type === "company_logo") return "left"
-  if (type === "company_address") return "right"
+  if (type === "company_details") return "right"
   return "full"
 }
