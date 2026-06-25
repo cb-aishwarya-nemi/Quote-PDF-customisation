@@ -1,4 +1,6 @@
+import { isDefaultPublishedTemplate } from "@/lib/seed-demo-library"
 import { normalizeConditionRules } from "@/lib/segment-conditions"
+import type { PublishedBuilderTemplate } from "@/store/template-library-store"
 import type {
   BlockDisplayCondition,
   BuilderTemplate,
@@ -63,3 +65,35 @@ export function deriveMockTemplateOwner(templateId: string) {
 }
 
 export const TEMPLATE_LIBRARY_OWNERS = MOCK_OWNERS
+
+/** Label for the conditions pill on template library cards. */
+export function countTemplateRoutingConditions(
+  record: PublishedBuilderTemplate,
+): number {
+  return normalizeConditionRules(
+    (record.template.displayCondition ?? null) as BlockDisplayCondition,
+  ).length
+}
+
+export function hasTemplateWithRoutingConditions(
+  templates: PublishedBuilderTemplate[],
+): boolean {
+  return templates.some(
+    (template) =>
+      !isDefaultPublishedTemplate(template) &&
+      countTemplateRoutingConditions(template) > 0,
+  )
+}
+
+export function formatTemplateCardConditionsLabel(
+  record: PublishedBuilderTemplate,
+  hasConditionalTemplates: boolean,
+): string {
+  if (isDefaultPublishedTemplate(record)) {
+    return hasConditionalTemplates ? "Fallback" : "Always shown"
+  }
+
+  const count = countTemplateRoutingConditions(record)
+  if (count === 1) return "1 condition"
+  return `${count} conditions`
+}

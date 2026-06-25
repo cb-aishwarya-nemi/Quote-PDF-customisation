@@ -18,6 +18,7 @@ import {
   filterAndSortPublishedTemplates,
   type TemplateLibraryQuery,
 } from "@/lib/filter-published-templates"
+import { hasTemplateWithRoutingConditions } from "@/lib/derive-template-library-meta"
 import { navigateToPromptBuilder } from "@/lib/navigate-to-builder"
 import { createBlankBuilderTemplate } from "@/lib/create-builder-template"
 import { createId } from "@/lib/create-id"
@@ -64,6 +65,10 @@ export function QuotePdfTemplatesPage() {
   const hasTemplates = displayTemplates.length > 0
   const hasUserCreatedTemplate = useMemo(
     () => hasUserCreatedTemplates(displayTemplates),
+    [displayTemplates],
+  )
+  const hasConditionalTemplates = useMemo(
+    () => hasTemplateWithRoutingConditions(displayTemplates),
     [displayTemplates],
   )
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -338,6 +343,7 @@ export function QuotePdfTemplatesPage() {
                   key={record.id}
                   record={record}
                   highlighted={record.id === highlightTemplateId}
+                  hasConditionalTemplates={hasConditionalTemplates}
                   onOpen={() => openTemplate(record)}
                   onDuplicate={() => handleDuplicate(record)}
                   onDelete={() => handleDelete(record)}

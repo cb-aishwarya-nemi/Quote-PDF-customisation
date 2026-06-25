@@ -1,9 +1,8 @@
 import { BuilderTemplateThumbnail } from "@/components/templates/BuilderTemplateThumbnail"
+import { formatTemplateCardConditionsLabel } from "@/lib/derive-template-library-meta"
 import { formatTemplateEditedAt } from "@/lib/derive-template-stats"
 import { isDefaultPublishedTemplate } from "@/lib/seed-demo-library"
-import { describeConditionRulesShort } from "@/lib/segment-conditions"
 import type { PublishedBuilderTemplate } from "@/store/template-library-store"
-import type { BlockDisplayCondition } from "@/types/prompt-builder"
 import type { TemplateStatus } from "@/types/template"
 import { Copy, Ellipsis, Eye, Pencil, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
@@ -11,6 +10,7 @@ import { useEffect, useRef, useState } from "react"
 type Props = {
   record: PublishedBuilderTemplate
   highlighted?: boolean
+  hasConditionalTemplates?: boolean
   onOpen: () => void
   onDuplicate: () => void
   onDelete: () => void
@@ -37,14 +37,16 @@ const STATUS_STYLES: Record<
 export function PublishedTemplateCard({
   record,
   highlighted,
+  hasConditionalTemplates = false,
   onOpen,
   onDuplicate,
   onDelete,
 }: Props) {
   const status = STATUS_STYLES[record.status]
   const isDefault = isDefaultPublishedTemplate(record)
-  const visibilityLabel = describeConditionRulesShort(
-    (record.template.displayCondition ?? null) as BlockDisplayCondition,
+  const conditionsLabel = formatTemplateCardConditionsLabel(
+    record,
+    hasConditionalTemplates,
   )
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -162,7 +164,7 @@ export function PublishedTemplateCard({
             {record.variableCount} var{record.variableCount === 1 ? "" : "s"}
           </span>
           <span className="rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-medium text-gray-600 shadow-sm ring-1 ring-gray-200/80 backdrop-blur-sm">
-            {visibilityLabel}
+            {conditionsLabel}
           </span>
         </div>
       </div>
