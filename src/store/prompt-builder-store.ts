@@ -68,6 +68,16 @@ import {
   makePdfVariableMappingMessage,
 } from "@/lib/template-generation-steps"
 import type { PdfFieldMapping } from "@/lib/pdf-field-mappings"
+import {
+  applyPdfMappingToTemplate,
+  getMappableVariables,
+  normalizePdfFieldMapping,
+} from "@/lib/pdf-field-mappings"
+import {
+  createMappingLearning,
+  makeLearningAssistantMessage,
+  type PdfMappingLearning,
+} from "@/lib/pdf-mapping-learnings"
 import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
 import {
   applyTermsVariantToSegments,
@@ -331,6 +341,7 @@ type PromptBuilderStore = {
   } | null
   pdfFieldMappings: PdfFieldMapping[]
   pdfSourceFileName: string | null
+  pdfMappingLearnings: PdfMappingLearning[]
   builderWorkflowTab: BuilderWorkflowTab
 
   initTemplate: (
@@ -362,6 +373,12 @@ type PromptBuilderStore = {
   setActivePageId: (pageId: string) => void
   setSelectedBlockId: (id: string | null) => void
   setBuilderWorkflowTab: (tab: BuilderWorkflowTab) => void
+  updatePdfFieldMapping: (
+    id: string,
+    patch: Partial<Pick<PdfFieldMapping, "pdfExcerpt" | "mappedValue">>,
+  ) => void
+  remapPdfFieldMapping: (id: string, variableId: string) => void
+  setPdfMappingFeedback: (id: string, feedback: "up" | "down" | null) => void
   setActiveScenario: (scenario: PreviewScenario) => void
   updateBlockContent: (blockId: string, content: Record<string, unknown>) => void
   updateBlockField: (blockId: string, field: string, value: unknown) => void
@@ -947,6 +964,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   pendingIntroPdfImport: null,
   pdfFieldMappings: [],
   pdfSourceFileName: null,
+  pdfMappingLearnings: [],
   builderWorkflowTab: "canvas",
   activePageId: QUOTE_PAGE_ID,
 
@@ -1017,8 +1035,11 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       activeScenario: PREVIEW_SCENARIOS[0],
       pendingImagePdfImport: null,
       pendingIntroPdfImport: null,
-      pdfFieldMappings: options?.extractionSummary?.fieldMappings ?? [],
+      pdfFieldMappings: (options?.extractionSummary?.fieldMappings ?? []).map(
+        normalizePdfFieldMapping,
+      ),
       pdfSourceFileName: options?.extractionSummary?.sourceFileName ?? null,
+      pdfMappingLearnings: [],
       builderWorkflowTab:
         (options?.extractionSummary?.fieldMappings?.length ?? 0) > 0
           ? "data_mapping"
@@ -1251,6 +1272,142 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   setSelectedBlockId: (id) => set({ selectedBlockId: id }),
 
   setBuilderWorkflowTab: (tab) => set({ builderWorkflowTab: tab }),
+
+  updatePdfFieldMapping: (id, patch) =>
+    set((s) => {
+      if (!s.template) return s
+      const index = s.pdfFieldMappings.findIndex((mapping) => mapping.id === id)
+      if (index < 0) return s
+
+      const current = s.pdfFieldMappings[index]
+      const nextMapping = normalizePdfFieldMapping({
+        ...current,
+        ...patch,
+        source:
+          current.source === "user" ||
+          patch.mappedValue !== undefined ||
+          patch.pdfExcerpt !== undefined
+            ? "user"
+            : current.source,
+        status:
+          (current.status === "unmapped" || patch.mappedValue !== undefined) &&
+          (patch.mappedValue?.trim() ?? current.mappedValue.trim())
+            ? "mapped"
+            : current.status,
+      })
+
+      if (patch.pdfExcerpt !== undefined && current.status === "unmapped") {
+        nextMapping.mappedValue = patch.pdfExcerpt.trim()
+      }
+
+      if (patch.mappedValue !== undefined && patch.mappedValue.trim()) {
+        if (!nextMapping.pdfExcerpt.trim()) {
+          nextMapping.pdfExcerpt = patch.mappedValue.trim()
+        }
+      }
+
+      const pdfFieldMappings = [...s.pdfFieldMappings]
+      pdfFieldMappings[index] = nextMapping
+
+      const template = nextMapping.mappedValue.trim()
+        ? applyPdfMappingToTemplate(s.template, nextMapping)
+        : s.template
+      return { template, pdfFieldMappings }
+    }),
+
+  remapPdfFieldMapping: (id, variableId) =>
+    set((s) => {
+      if (!s.template) return s
+      const index = s.pdfFieldMappings.findIndex((mapping) => mapping.id === id)
+      if (index < 0) return s
+
+      const current = s.pdfFieldMappings[index]
+      const variable = getMappableVariables(s.template).find(
+        (item) => item.id === variableId,
+      )
+      if (!variable) return s
+
+      const correctedFrom =
+        current.variableKey !== variable.key
+          ? { key: current.variableKey, label: current.variableLabel }
+          : undefined
+
+      const nextMapping = normalizePdfFieldMapping({
+        ...current,
+        id: `${variable.blockId}:${variable.field}:${variable.key}`,
+        blockId: variable.blockId,
+        blockType: variable.blockType,
+        blockLabel: variable.blockLabel,
+        field: variable.field,
+        variableKey: variable.key,
+        variableLabel: variable.label,
+        category: variable.category,
+        source: "user",
+        feedback: current.feedback === "down" ? "down" : current.feedback,
+        status: current.mappedValue.trim() ? "mapped" : current.status,
+      })
+
+      const pdfFieldMappings = s.pdfFieldMappings.map((mapping, mappingIndex) =>
+        mappingIndex === index ? nextMapping : mapping,
+      )
+
+      let pdfMappingLearnings = s.pdfMappingLearnings
+      let messages = s.messages
+
+      if (current.feedback === "down" && correctedFrom) {
+        const learning = createMappingLearning(nextMapping, "down", correctedFrom)
+        pdfMappingLearnings = [...pdfMappingLearnings, learning]
+        const reply = makeLearningAssistantMessage(pdfMappingLearnings)
+        if (reply) {
+          messages = [
+            ...messages,
+            {
+              id: learning.id,
+              role: "assistant" as const,
+              content: reply,
+              timestamp: learning.createdAt,
+            },
+          ]
+        }
+      }
+
+      const template = nextMapping.mappedValue.trim()
+        ? applyPdfMappingToTemplate(s.template, nextMapping)
+        : s.template
+
+      return { template, pdfFieldMappings, pdfMappingLearnings, messages }
+    }),
+
+  setPdfMappingFeedback: (id, feedback) =>
+    set((s) => {
+      const index = s.pdfFieldMappings.findIndex((mapping) => mapping.id === id)
+      if (index < 0) return s
+
+      const current = s.pdfFieldMappings[index]
+      const pdfFieldMappings = [...s.pdfFieldMappings]
+      pdfFieldMappings[index] = { ...current, feedback }
+
+      if (!feedback) {
+        return { pdfFieldMappings }
+      }
+
+      const learning = createMappingLearning(current, feedback)
+      const pdfMappingLearnings = [...s.pdfMappingLearnings, learning]
+      const reply = makeLearningAssistantMessage(pdfMappingLearnings)
+      const messages = reply
+        ? [
+            ...s.messages,
+            {
+              id: learning.id,
+              role: "assistant" as const,
+              content: reply,
+              timestamp: learning.createdAt,
+            },
+          ]
+        : s.messages
+
+      return { pdfFieldMappings, pdfMappingLearnings, messages }
+    }),
 
   setActivePageId: (pageId) =>
     set({ activePageId: pageId, selectedBlockId: null }),

@@ -10,8 +10,13 @@ import type {
   BuilderBlock,
   BuilderBlockType,
   BuilderTemplate,
+  TemplateVariable,
   TemplateVariableCategory,
 } from "@/types/prompt-builder"
+
+export type PdfMappingFeedback = "up" | "down" | null
+export type PdfMappingSource = "ai" | "user"
+export type PdfMappingStatus = "mapped" | "unmapped"
 
 export type PdfFieldMapping = {
   id: string
@@ -24,6 +29,33 @@ export type PdfFieldMapping = {
   category: TemplateVariableCategory
   pdfExcerpt: string
   mappedValue: string
+  status: PdfMappingStatus
+  feedback: PdfMappingFeedback
+  source: PdfMappingSource
+}
+
+export function mappingSlotKey(input: {
+  blockId: string
+  field: string
+}): string {
+  return `${input.blockId}:${input.field}`
+}
+
+export function normalizePdfFieldMapping(
+  mapping: PdfFieldMapping,
+): PdfFieldMapping {
+  return {
+    ...mapping,
+    status: mapping.status ?? (mapping.mappedValue?.trim() ? "mapped" : "unmapped"),
+    feedback: mapping.feedback ?? null,
+    source: mapping.source ?? "ai",
+  }
+}
+
+export function getMappableVariables(template: BuilderTemplate): TemplateVariable[] {
+  return deriveTemplateVariables(template).filter(
+    (variable) => variable.category !== "routing",
+  )
 }
 
 function excerptAround(text: string, index: number, length: number): string {
@@ -93,6 +125,9 @@ function pushMapping(
     category,
     pdfExcerpt: findPdfExcerpt(fullText, mappedValue),
     mappedValue,
+    status: "mapped",
+    feedback: null,
+    source: "ai",
   })
 }
 
@@ -270,5 +305,148 @@ function derivePdfFieldMappingsFromVariables(
       category: variable.category,
       pdfExcerpt: variable.sampleValue,
       mappedValue: variable.sampleValue,
+      status: "mapped" as const,
+      feedback: null,
+      source: "ai" as const,
     }))
+}
+
+function buildUnmappedMappings(
+  template: BuilderTemplate,
+  mappedSlots: Set<string>,
+): PdfFieldMapping[] {
+  return getMappableVariables(template)
+    .filter((variable) => !mappedSlots.has(mappingSlotKey(variable)))
+    .map((variable) => ({
+      id: `unmapped:${variable.id}`,
+      blockId: variable.blockId,
+      blockType: variable.blockType,
+      blockLabel: variable.blockLabel,
+      field: variable.field,
+      variableKey: variable.key,
+      variableLabel: variable.label,
+      category: variable.category,
+      pdfExcerpt: "",
+      mappedValue: "",
+      status: "unmapped" as const,
+      feedback: null,
+      source: "ai" as const,
+    }))
+}
+
+/** AI-mapped fields plus template variables the AI could not match to PDF text. */
+export function buildCompletePdfFieldMappings(
+  extractedTemplate: BuilderTemplate,
+  mergedTemplate: BuilderTemplate,
+  fullText: string,
+): PdfFieldMapping[] {
+  const mapped = derivePdfFieldMappings(extractedTemplate, fullText).map(
+    normalizePdfFieldMapping,
+  )
+  const mappedSlots = new Set(mapped.map((mapping) => mappingSlotKey(mapping)))
+  const unmapped = buildUnmappedMappings(mergedTemplate, mappedSlots)
+
+  return [...mapped, ...unmapped].sort((a, b) => {
+    if (a.status !== b.status) {
+      return a.status === "mapped" ? -1 : 1
+    }
+    const blockOrder =
+      mergedTemplate.blocks.findIndex((block) => block.id === a.blockId) -
+      mergedTemplate.blocks.findIndex((block) => block.id === b.blockId)
+    if (blockOrder !== 0) return blockOrder
+    return a.variableLabel.localeCompare(b.variableLabel)
+  })
+}
+
+export function applyFieldValueToContent(
+  content: Record<string, unknown>,
+  field: string,
+  value: string,
+): Record<string, unknown> {
+  const rowMatch = field.match(/^rows\[(\d+)\]\.(\w+)$/)
+  if (rowMatch) {
+    const index = Number(rowMatch[1])
+    const key = rowMatch[2]
+    const rows = [...((content.rows as Record<string, unknown>[]) ?? [])]
+    while (rows.length <= index) rows.push({})
+    rows[index] = { ...rows[index], [key]: value }
+    return { ...content, rows }
+  }
+
+  const segmentMatch = field.match(/^segments\[(\d+)\]\.(\w+)$/)
+  if (segmentMatch) {
+    const index = Number(segmentMatch[1])
+    const key = segmentMatch[2]
+    const segments = [...((content.segments as Record<string, unknown>[]) ?? [])]
+    while (segments.length <= index) segments.push({})
+    segments[index] = { ...segments[index], [key]: value }
+    return { ...content, segments }
+  }
+
+  return { ...content, [field]: value }
+}
+
+export function applyPdfMappingToTemplate(
+  template: BuilderTemplate,
+  mapping: PdfFieldMapping,
+): BuilderTemplate {
+  const value = mapping.mappedValue.trim()
+  if (!value) return template
+
+  const patchBlock = (block: BuilderBlock): BuilderBlock => {
+    if (block.id !== mapping.blockId) return block
+    return {
+      ...block,
+      content: applyFieldValueToContent(block.content, mapping.field, value),
+    }
+  }
+
+  return {
+    ...template,
+    blocks: template.blocks.map(patchBlock),
+    customPages: template.customPages?.map((page) => ({
+      ...page,
+      blocks: page.blocks?.map(patchBlock),
+    })),
+  }
+}
+
+export function resolveMappingVariableId(
+  template: BuilderTemplate,
+  mapping: PdfFieldMapping,
+): string {
+  if (mapping.id.startsWith("unmapped:")) {
+    return mapping.id.slice("unmapped:".length)
+  }
+
+  const match = getMappableVariables(template).find(
+    (variable) =>
+      variable.blockId === mapping.blockId &&
+      variable.field === mapping.field &&
+      variable.key === mapping.variableKey,
+  )
+  return match?.id ?? ""
+}
+
+export function countReviewedMappings(mappings: PdfFieldMapping[]): {
+  reviewed: number
+  total: number
+  mapped: number
+  unmapped: number
+} {
+  const mapped = mappings.filter((m) => m.status === "mapped")
+  const unmapped = mappings.filter((m) => m.status === "unmapped")
+  const reviewed = mappings.filter(
+    (m) =>
+      m.feedback === "up" ||
+      (m.status === "mapped" && m.mappedValue.trim() && m.source === "user") ||
+      (m.status === "unmapped" && m.mappedValue.trim()),
+  ).length
+
+  return {
+    reviewed,
+    total: mappings.length,
+    mapped: mapped.length,
+    unmapped: unmapped.length,
+  }
 }

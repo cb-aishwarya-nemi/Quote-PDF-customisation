@@ -18,7 +18,7 @@ import type {
   BuilderTemplate,
   ConditionalSegment,
 } from "@/types/prompt-builder"
-import { derivePdfFieldMappings, type PdfFieldMapping } from "@/lib/pdf-field-mappings"
+import { buildCompletePdfFieldMappings, type PdfFieldMapping } from "@/lib/pdf-field-mappings"
 
 export type PdfExtractionSummary = {
   sourceFileName: string
@@ -520,7 +520,11 @@ export async function extractTemplateFromFiles(
     ...defaultTemplate,
     blocks: normalizeBuilderBlocks(blocks),
   }
-  const fieldMappings = derivePdfFieldMappings(extractedTemplate, doc.fullText)
+  const fieldMappings = buildCompletePdfFieldMappings(
+    extractedTemplate,
+    template,
+    doc.fullText,
+  )
 
   return {
     template,

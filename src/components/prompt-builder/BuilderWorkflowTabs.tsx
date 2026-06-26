@@ -1,4 +1,5 @@
 import type { BuilderWorkflowTab } from "@/store/prompt-builder-store"
+import { countReviewedMappings } from "@/lib/pdf-field-mappings"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 
 const TABS: { id: BuilderWorkflowTab; label: string }[] = [
@@ -9,9 +10,10 @@ const TABS: { id: BuilderWorkflowTab; label: string }[] = [
 export function BuilderWorkflowTabs() {
   const activeTab = usePromptBuilderStore((s) => s.builderWorkflowTab)
   const setBuilderWorkflowTab = usePromptBuilderStore((s) => s.setBuilderWorkflowTab)
-  const mappingCount = usePromptBuilderStore((s) => s.pdfFieldMappings.length)
+  const mappings = usePromptBuilderStore((s) => s.pdfFieldMappings)
+  const { reviewed, total } = countReviewedMappings(mappings)
 
-  if (mappingCount === 0) return null
+  if (total === 0) return null
 
   return (
     <div
@@ -43,7 +45,7 @@ export function BuilderWorkflowTabs() {
                     : "bg-gray-200/70 text-gray-600"
                 }`}
               >
-                {mappingCount}/{mappingCount}
+                {reviewed}/{total}
               </span>
             )}
           </button>

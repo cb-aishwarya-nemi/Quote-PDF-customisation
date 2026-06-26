@@ -59,11 +59,14 @@ export function makePdfVariableMappingMessage(
 ): ChatMessage | null {
   if (!summary.fieldMappings.length) return null
 
+  const mapped = summary.fieldMappings.filter((m) => m.status !== "unmapped").length
+  const unmapped = summary.fieldMappings.filter((m) => m.status === "unmapped").length
+
   return {
     id: "pdf-variable-mapping",
     role: "assistant",
     kind: "pdf_variable_mapping",
-    content: `Mapped ${summary.fieldMappings.length} field${summary.fieldMappings.length === 1 ? "" : "s"} from your PDF. Review them in the Data mapping tab, then continue to the template canvas.`,
+    content: `Mapped ${mapped} field${mapped === 1 ? "" : "s"} from your PDF${unmapped > 0 ? ` — ${unmapped} still need your input` : ""}. Review them in the Data mapping tab: confirm with 👍, correct with 👎, and fill in anything I missed.`,
     timestamp: new Date().toISOString(),
   }
 }

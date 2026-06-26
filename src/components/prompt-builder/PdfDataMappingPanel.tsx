@@ -35,8 +35,8 @@ export function PdfDataMappingPanel() {
           </h1>
           <p className="max-w-2xl text-[13px] leading-relaxed text-gray-600">
             We read your uploaded quote PDF and mapped detected text to quote
-            variables. Review each match, then continue to the template canvas to
-            refine layout and copy.
+            variables. Review each match, hover to confirm or remap, then
+            continue to the template canvas.
           </p>
           {sourceFileName && (
             <p className="text-[12px] text-gray-500">Source file: {sourceFileName}</p>
