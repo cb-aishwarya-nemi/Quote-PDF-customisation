@@ -143,7 +143,7 @@ export type PreviewScenario = {
   values: Record<string, string>
 }
 
-export type ChatMessageKind = "text" | "publish_checklist"
+export type ChatMessageKind = "text" | "publish_checklist" | "pdf_variable_mapping"
 
 export type ChatMessage = {
   id: string

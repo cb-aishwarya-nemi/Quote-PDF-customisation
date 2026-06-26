@@ -65,13 +65,15 @@ import {
   makeCreationBriefReply,
   makeExtractionSummaryMessage,
   makeGenerationSummaryMessage,
+  makePdfVariableMappingMessage,
 } from "@/lib/template-generation-steps"
+import type { PdfFieldMapping } from "@/lib/pdf-field-mappings"
+import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
 import {
   applyTermsVariantToSegments,
   analyzeTermsConditionalOverlap,
   describeTermsConditionalOverlapMessage,
 } from "@/lib/terms-segments"
-import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
 import {
   applyAgentDemoChanges,
   DEMO_USER_PROMPT,
@@ -97,6 +99,8 @@ import { useTemplateLibraryStore, type PublishedBuilderTemplate } from "@/store/
 
 export type BuilderEditorMode = "edit" | "preview" | "sales"
 export type PreviewPersona = "admin" | "sales"
+
+export type BuilderWorkflowTab = "data_mapping" | "canvas"
 
 export function isSalesRestrictedEditor(
   editorMode: BuilderEditorMode,
@@ -325,6 +329,9 @@ type PromptBuilderStore = {
     pdfBytes?: ArrayBuffer
     pageCount: number
   } | null
+  pdfFieldMappings: PdfFieldMapping[]
+  pdfSourceFileName: string | null
+  builderWorkflowTab: BuilderWorkflowTab
 
   initTemplate: (
     template: BuilderTemplate,
@@ -354,6 +361,7 @@ type PromptBuilderStore = {
   activePageId: string
   setActivePageId: (pageId: string) => void
   setSelectedBlockId: (id: string | null) => void
+  setBuilderWorkflowTab: (tab: BuilderWorkflowTab) => void
   setActiveScenario: (scenario: PreviewScenario) => void
   updateBlockContent: (blockId: string, content: Record<string, unknown>) => void
   updateBlockField: (blockId: string, field: string, value: unknown) => void
@@ -937,6 +945,9 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   publishingTemplateName: null,
   pendingImagePdfImport: null,
   pendingIntroPdfImport: null,
+  pdfFieldMappings: [],
+  pdfSourceFileName: null,
+  builderWorkflowTab: "canvas",
   activePageId: QUOTE_PAGE_ID,
 
   initTemplate: (template, options) => {
@@ -955,9 +966,14 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
           ? makeGenerationSummaryMessage(options.generationStepLabels)
           : null
 
+    const mappingMessage = options?.extractionSummary
+      ? makePdfVariableMappingMessage(options.extractionSummary)
+      : null
+
     if (brief) {
       messages = [
         ...(summaryMessage ? [summaryMessage] : []),
+        ...(mappingMessage ? [mappingMessage] : []),
         {
           id: "creation-user",
           role: "user",
@@ -969,6 +985,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
     } else if (summaryMessage) {
       messages = [
         summaryMessage,
+        ...(mappingMessage ? [mappingMessage] : []),
         {
           id: "welcome",
           role: "assistant",
@@ -1000,6 +1017,12 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       activeScenario: PREVIEW_SCENARIOS[0],
       pendingImagePdfImport: null,
       pendingIntroPdfImport: null,
+      pdfFieldMappings: options?.extractionSummary?.fieldMappings ?? [],
+      pdfSourceFileName: options?.extractionSummary?.sourceFileName ?? null,
+      builderWorkflowTab:
+        (options?.extractionSummary?.fieldMappings?.length ?? 0) > 0
+          ? "data_mapping"
+          : "canvas",
       ignoredValidationIssueIds: [],
       conditionStripHighlighted: false,
       activePageId: QUOTE_PAGE_ID,
@@ -1024,7 +1047,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   setTemplateDisplayCondition: (condition) =>
     set((s) => {
-      if (!s.template) return s
+      if (!s.template || s.editorMode !== "edit") return s
       const next = {
         template: { ...s.template, displayCondition: condition },
       }
@@ -1226,6 +1249,8 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
     }),
 
   setSelectedBlockId: (id) => set({ selectedBlockId: id }),
+
+  setBuilderWorkflowTab: (tab) => set({ builderWorkflowTab: tab }),
 
   setActivePageId: (pageId) =>
     set({ activePageId: pageId, selectedBlockId: null }),

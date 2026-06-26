@@ -121,6 +121,199 @@ export function segmentHasConditionValue(
   return rulesIncludeValue(condition, field, value)
 }
 
+function formatNaturalList(items: string[]): string {
+  if (items.length === 0) return ""
+  if (items.length === 1) return items[0]
+  if (items.length === 2) return `${items[0]} or ${items[1]}`
+  return `${items.slice(0, -1).join(", ")}, or ${items[items.length - 1]}`
+}
+
+function ruleValueLabel(rule: SegmentCondition): string {
+  return getConditionValueLabel(rule.field, rule.value, rule.label)
+}
+
+function summarizeFieldOrValues(field: string, values: string[]): string {
+  const joined = formatNaturalList(values)
+  switch (field) {
+    case "deal_type":
+      return `${joined} deals`
+    case "customer_region":
+      return `quotes in ${joined}`
+    case "payment_terms":
+      return `${joined} payment terms`
+    case "item_type":
+      return `${joined} items`
+    case "frequency":
+      return `${joined} billing`
+    default: {
+      const fieldDef = getConditionField(field)
+      const label = (fieldDef?.label ?? field).toLowerCase()
+      return values.length === 1 ? `${label} is ${joined}` : `${label} is ${joined}`
+    }
+  }
+}
+
+function summarizePositiveFragment(rule: SegmentCondition): string {
+  const value = ruleValueLabel(rule)
+
+  if (rule.operator === "contains") {
+    if (rule.field === "item_name") return `items containing "${value}"`
+    const fieldDef = getConditionField(rule.field)
+    return `${(fieldDef?.label ?? rule.field).toLowerCase()} contains ${value}`
+  }
+
+  switch (rule.field) {
+    case "deal_type":
+      return `${value} deals`
+    case "customer_region":
+      return value
+    case "payment_terms":
+      return `${value} payment`
+    case "item_type":
+      return `${value} items`
+    case "frequency":
+      return `${value} billing`
+    case "metered":
+      return value === "Yes" ? "metered usage" : "non-metered usage"
+    case "quantity":
+      return `quantity ${value}`
+    case "item_name":
+      return `${value} items`
+    default: {
+      const fieldDef = getConditionField(rule.field)
+      return `${(fieldDef?.label ?? rule.field).toLowerCase()} is ${value}`
+    }
+  }
+}
+
+function summarizeNegativeFragment(rule: SegmentCondition): string {
+  const value = ruleValueLabel(rule)
+  switch (rule.field) {
+    case "deal_type":
+      return `non-${value.toLowerCase()} deals`
+    case "customer_region":
+      return `quotes outside ${value}`
+    case "payment_terms":
+      return `non-${value.toLowerCase()} payment`
+    default: {
+      const fieldDef = getConditionField(rule.field)
+      return `${(fieldDef?.label ?? rule.field).toLowerCase()} isn't ${value}`
+    }
+  }
+}
+
+function summarizeAndRules(rules: SegmentCondition[]): string {
+  const dealRules = rules.filter((r) => r.field === "deal_type" && r.operator === "is")
+  const regionRules = rules.filter(
+    (r) => r.field === "customer_region" && r.operator === "is",
+  )
+  const paymentRules = rules.filter(
+    (r) => r.field === "payment_terms" && r.operator === "is",
+  )
+  const consumed = new Set([...dealRules, ...regionRules, ...paymentRules])
+  const remaining = rules.filter((rule) => !consumed.has(rule))
+
+  const parts: string[] = []
+
+  if (dealRules.length === 1) {
+    parts.push(summarizePositiveFragment(dealRules[0]))
+  } else if (dealRules.length > 1) {
+    parts.push(
+      summarizeFieldOrValues(
+        "deal_type",
+        dealRules.map((rule) => ruleValueLabel(rule)),
+      ),
+    )
+  }
+
+  if (regionRules.length === 1) {
+    const region = ruleValueLabel(regionRules[0])
+    if (parts.length > 0 && parts[0].endsWith(" deals")) {
+      parts[0] = `${parts[0]} in ${region}`
+    } else {
+      parts.push(`quotes in ${region}`)
+    }
+  } else if (regionRules.length > 1) {
+    parts.push(
+      summarizeFieldOrValues(
+        "customer_region",
+        regionRules.map((rule) => ruleValueLabel(rule)),
+      ),
+    )
+  }
+
+  if (paymentRules.length === 1) {
+    const payment = summarizePositiveFragment(paymentRules[0])
+    if (parts.length > 0) {
+      parts[0] = `${parts[0]} with ${payment}`
+    } else {
+      parts.push(`quotes with ${payment}`)
+    }
+  } else if (paymentRules.length > 1) {
+    parts.push(
+      summarizeFieldOrValues(
+        "payment_terms",
+        paymentRules.map((rule) => ruleValueLabel(rule)),
+      ),
+    )
+  }
+
+  for (const rule of remaining) {
+    if (rule.operator === "is_not") {
+      parts.push(summarizeNegativeFragment(rule))
+    } else {
+      parts.push(summarizePositiveFragment(rule))
+    }
+  }
+
+  if (parts.length === 0) {
+    return rules
+      .map((rule) =>
+        rule.operator === "is_not"
+          ? summarizeNegativeFragment(rule)
+          : summarizePositiveFragment(rule),
+      )
+      .join(" and ")
+  }
+
+  return parts.join(" and ")
+}
+
+/** One-line natural-language summary for quote-level template routing rules. */
+export function summarizeQuoteLevelConditions(input: ConditionInput): string {
+  const { match, rules } = parseConditionInput(input)
+  if (rules.length === 0) return "Used for all quotes."
+
+  if (rules.length === 1) {
+    const rule = rules[0]
+    if (rule.operator === "is_not") {
+      return `Used for ${summarizeNegativeFragment(rule)}.`
+    }
+    return `Used for ${summarizePositiveFragment(rule)}.`
+  }
+
+  if (match === "or") {
+    const sameField = rules.every(
+      (rule) => rule.field === rules[0].field && rule.operator === "is",
+    )
+    if (sameField) {
+      return `Used for ${summarizeFieldOrValues(
+        rules[0].field,
+        rules.map((rule) => ruleValueLabel(rule)),
+      )}.`
+    }
+
+    const fragments = rules.map((rule) =>
+      rule.operator === "is_not"
+        ? summarizeNegativeFragment(rule)
+        : summarizePositiveFragment(rule),
+    )
+    return `Used for ${formatNaturalList(fragments)}.`
+  }
+
+  return `Used for ${summarizeAndRules(rules)}.`
+}
+
 /** @deprecated use describeConditionRules */
 export function describeSegmentCondition(condition: SegmentCondition | null): string {
   if (!condition) return "Always shown"

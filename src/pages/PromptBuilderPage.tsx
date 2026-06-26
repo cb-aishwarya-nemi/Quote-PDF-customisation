@@ -1,10 +1,12 @@
 import { AgentChatPanel } from "@/components/prompt-builder/AgentChatPanel"
+import { PdfDataMappingPanel } from "@/components/prompt-builder/PdfDataMappingPanel"
 import { PublishInterstitial } from "@/components/prompt-builder/PublishInterstitial"
 import { PagesPanel } from "@/components/prompt-builder/PagesPanel"
 import { QuoteCanvasArea } from "@/components/prompt-builder/QuoteCanvasArea"
 import { PromptBuilderHeader } from "@/components/prompt-builder/PromptBuilderHeader"
 import { PromptBuilderSkeleton } from "@/components/prompt-builder/PromptBuilderSkeleton"
 import { createBuilderTemplate } from "@/lib/create-builder-template"
+import { BUILDER_WORKSPACE_BG } from "@/lib/canvas-constants"
 import type { BuilderNavigationState } from "@/lib/navigate-to-builder"
 import { applyCreationContextToTemplate } from "@/lib/derive-template-from-creation"
 import { isDefaultPublishedTemplate } from "@/lib/seed-demo-library"
@@ -24,6 +26,8 @@ export function PromptBuilderPage() {
   const publishingTemplateName = usePromptBuilderStore(
     (s) => s.publishingTemplateName,
   )
+  const builderWorkflowTab = usePromptBuilderStore((s) => s.builderWorkflowTab)
+  const pdfFieldMappings = usePromptBuilderStore((s) => s.pdfFieldMappings)
 
   const navState = location.state as BuilderNavigationState | null
   const [showSkeleton, setShowSkeleton] = useState(
@@ -44,10 +48,13 @@ export function PromptBuilderPage() {
     useTemplateLibraryStore.getState().ensureInitialized()
 
     const generationOptions =
-      navState?.generationStepLabels?.length || navState?.creationBrief
+      navState?.generationStepLabels?.length ||
+      navState?.creationBrief ||
+      navState?.extractionSummary
         ? {
             generationStepLabels: navState.generationStepLabels,
             creationBrief: navState.creationBrief,
+            extractionSummary: navState.extractionSummary,
           }
         : undefined
 
@@ -92,6 +99,7 @@ export function PromptBuilderPage() {
     navState?.generationStepLabels,
     navState?.creationBrief,
     navState?.uploadedFileNames,
+    navState?.extractionSummary,
   ])
 
   useEffect(() => {
@@ -105,18 +113,43 @@ export function PromptBuilderPage() {
     return () => clearTimeout(timer)
   }, [location.key, navState?.fromGeneration])
 
+  const showWorkflowTabs = pdfFieldMappings.length > 0
+  const showDataMapping =
+    showWorkflowTabs && builderWorkflowTab === "data_mapping"
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#f5f7fa]">
+    <div className="flex h-screen flex-col overflow-hidden bg-white">
       <PromptBuilderHeader />
-      {showSkeleton ? (
-        <PromptBuilderSkeleton />
-      ) : (
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <PagesPanel />
-          <QuoteCanvasArea />
-          <AgentChatPanel />
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        style={{ backgroundColor: BUILDER_WORKSPACE_BG }}
+      >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {showSkeleton ? (
+            <PromptBuilderSkeleton />
+          ) : (
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              {showDataMapping ? (
+                <div
+                  className="w-[124px] shrink-0 border-r border-gray-200"
+                  style={{ backgroundColor: BUILDER_WORKSPACE_BG }}
+                  aria-hidden
+                />
+              ) : (
+                <PagesPanel />
+              )}
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                {showDataMapping ? (
+                  <PdfDataMappingPanel />
+                ) : (
+                  <QuoteCanvasArea />
+                )}
+              </div>
+              <AgentChatPanel />
+            </div>
+          )}
         </div>
-      )}
+      </div>
       {publishingTemplateName && (
         <PublishInterstitial templateName={publishingTemplateName} />
       )}

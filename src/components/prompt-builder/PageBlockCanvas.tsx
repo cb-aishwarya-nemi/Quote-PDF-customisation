@@ -13,6 +13,7 @@ import {
 } from "@/components/prompt-builder/SortableBuilderBlock"
 import { LayoutColumnDropSlot } from "@/components/prompt-builder/LayoutColumnDropSlot"
 import { PageCanvasDeleteControls } from "@/components/prompt-builder/RemovePageButton"
+import { CanvasPageDocumentShell } from "@/components/prompt-builder/CanvasPageDocumentShell"
 import { TemplateDocumentFrame } from "@/components/prompt-builder/TemplateDocumentFrame"
 import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import {
@@ -190,6 +191,7 @@ type Props = {
   isSales: boolean
   exportRef?: React.Ref<HTMLDivElement>
   onFrameClick?: (event: React.MouseEvent) => void
+  showPreviewScenarioStrip?: boolean
 }
 
 export function PageBlockCanvas({
@@ -199,6 +201,7 @@ export function PageBlockCanvas({
   isSales,
   exportRef,
   onFrameClick,
+  showPreviewScenarioStrip = false,
 }: Props) {
   const editorMode = usePromptBuilderStore((s) => s.editorMode)
   const activeScenario = usePromptBuilderStore((s) => s.activeScenario)
@@ -570,27 +573,40 @@ export function PageBlockCanvas({
     </div>
   )
 
-  if (isPreview) {
-    return wrapPage(
+  const renderDocumentFrame = (children: React.ReactNode) => {
+    if (showPreviewScenarioStrip) {
+      return (
+        <CanvasPageDocumentShell
+          exportRef={exportRef}
+          onClick={onFrameClick}
+          pageId={pageId}
+          showPreviewScenarioStrip
+        >
+          {children}
+        </CanvasPageDocumentShell>
+      )
+    }
+
+    return (
       <TemplateDocumentFrame
         exportRef={exportRef}
         onClick={onFrameClick}
         pageId={pageId}
       >
-        {previewContent}
-      </TemplateDocumentFrame>,
+        {children}
+      </TemplateDocumentFrame>
     )
+  }
+
+  if (isPreview) {
+    return wrapPage(renderDocumentFrame(previewContent))
   }
 
   if (isEmptyBlockPage && !isSales) {
     return wrapPage(
-      <TemplateDocumentFrame
-        exportRef={exportRef}
-        onClick={onFrameClick}
-        pageId={pageId}
-      >
-        <BlockPageEmptyState pageId={pageId} allowedTypes={allowedBlockTypes} />
-      </TemplateDocumentFrame>,
+      renderDocumentFrame(
+        <BlockPageEmptyState pageId={pageId} allowedTypes={allowedBlockTypes} />,
+      ),
     )
   }
 
@@ -602,13 +618,7 @@ export function PageBlockCanvas({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <TemplateDocumentFrame
-        exportRef={exportRef}
-        onClick={onFrameClick}
-        pageId={pageId}
-      >
-        {editCanvas}
-      </TemplateDocumentFrame>
+      {renderDocumentFrame(editCanvas)}
       <DragOverlay>
         {activeDragBlock ? (
           <BuilderDragOverlayLabel block={activeDragBlock} />

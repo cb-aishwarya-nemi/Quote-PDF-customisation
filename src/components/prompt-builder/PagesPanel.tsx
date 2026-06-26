@@ -1,4 +1,4 @@
-import { BuilderTemplateThumbnail } from "@/components/templates/BuilderTemplateThumbnail"
+import { PageThumbnailPreview } from "@/components/prompt-builder/PageThumbnailPreview"
 import { useIsSalesMode, useIsTemplateEditMode } from "@/hooks/use-builder-editor-mode"
 import {
   deriveTemplatePages,
@@ -67,7 +67,7 @@ function CustomPageThumbnail({ pageId }: { pageId: string }) {
     if (blocks.length > 0 && template) {
       return (
         <div className="h-full w-full overflow-hidden bg-gradient-to-b from-[#eef0f3] to-[#e4e7eb] p-1.5">
-          <BuilderTemplateThumbnail
+          <PageThumbnailPreview
             template={{ ...template, blocks }}
             compact
             fill
@@ -119,7 +119,7 @@ function QuotePageThumbnail() {
 
   return (
     <div className="h-full w-full overflow-hidden bg-gradient-to-b from-[#eef0f3] to-[#e4e7eb] p-1.5">
-      <BuilderTemplateThumbnail template={template} compact fill />
+      <PageThumbnailPreview template={template} compact fill />
     </div>
   )
 }

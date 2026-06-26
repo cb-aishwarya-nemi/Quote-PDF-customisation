@@ -1,5 +1,8 @@
 import { isDefaultPublishedTemplate } from "@/lib/seed-demo-library"
-import { normalizeConditionRules } from "@/lib/segment-conditions"
+import {
+  normalizeConditionRules,
+  summarizeQuoteLevelConditions,
+} from "@/lib/segment-conditions"
 import type { PublishedBuilderTemplate } from "@/store/template-library-store"
 import type {
   BlockDisplayCondition,
@@ -88,12 +91,30 @@ export function hasTemplateWithRoutingConditions(
 export function formatTemplateCardConditionsLabel(
   record: PublishedBuilderTemplate,
   hasConditionalTemplates: boolean,
-): string {
+): string | null {
   if (isDefaultPublishedTemplate(record)) {
-    return hasConditionalTemplates ? "Fallback" : "Always shown"
+    return hasConditionalTemplates ? "Fallback" : null
   }
 
   const count = countTemplateRoutingConditions(record)
+  if (count === 0) return null
   if (count === 1) return "1 condition"
   return `${count} conditions`
+}
+
+/** Routing summary for template library list rows. */
+export function formatTemplateRoutingConditionsSummary(
+  record: PublishedBuilderTemplate,
+  hasConditionalTemplates: boolean,
+): string {
+  if (isDefaultPublishedTemplate(record)) {
+    if (hasConditionalTemplates) {
+      return "Used when no other template matches."
+    }
+    return "Used for all quotes."
+  }
+
+  return summarizeQuoteLevelConditions(
+    (record.template.displayCondition ?? null) as BlockDisplayCondition,
+  )
 }

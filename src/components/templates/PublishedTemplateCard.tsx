@@ -1,11 +1,20 @@
-import { BuilderTemplateThumbnail } from "@/components/templates/BuilderTemplateThumbnail"
-import { formatTemplateCardConditionsLabel } from "@/lib/derive-template-library-meta"
+import {
+  formatTemplateCardConditionsLabel,
+  formatTemplateRoutingConditionsSummary,
+} from "@/lib/derive-template-library-meta"
 import { formatTemplateEditedAt } from "@/lib/derive-template-stats"
 import { isDefaultPublishedTemplate } from "@/lib/seed-demo-library"
 import type { PublishedBuilderTemplate } from "@/store/template-library-store"
 import type { TemplateStatus } from "@/types/template"
 import { Copy, Ellipsis, Eye, Pencil, Trash2 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
+import { createPortal } from "react-dom"
 
 type Props = {
   record: PublishedBuilderTemplate
@@ -48,15 +57,47 @@ export function PublishedTemplateCard({
     record,
     hasConditionalTemplates,
   )
+  const conditionsSummary = formatTemplateRoutingConditionsSummary(
+    record,
+    hasConditionalTemplates,
+  )
 
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 })
   const menuRef = useRef<HTMLDivElement>(null)
-  const cardRef = useRef<HTMLElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const rowRef = useRef<HTMLElement>(null)
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    setMenuPos({
+      top: rect.bottom + 4,
+      left: rect.right,
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!menuOpen) return
+    updateMenuPosition()
+  }, [menuOpen, updateMenuPosition])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onScrollOrResize = () => updateMenuPosition()
+    window.addEventListener("resize", onScrollOrResize)
+    window.addEventListener("scroll", onScrollOrResize, true)
+    return () => {
+      window.removeEventListener("resize", onScrollOrResize)
+      window.removeEventListener("scroll", onScrollOrResize, true)
+    }
+  }, [menuOpen, updateMenuPosition])
 
   useEffect(() => {
     if (!highlighted) return
     const frame = window.requestAnimationFrame(() => {
-      cardRef.current?.scrollIntoView({
+      rowRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "center",
       })
@@ -67,9 +108,14 @@ export function PublishedTemplateCard({
   useEffect(() => {
     if (!menuOpen) return
     const onClick = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false)
+      const target = event.target as Node
+      if (
+        menuRef.current?.contains(target) ||
+        triggerRef.current?.contains(target)
+      ) {
+        return
       }
+      setMenuOpen(false)
     }
     document.addEventListener("mousedown", onClick)
     return () => document.removeEventListener("mousedown", onClick)
@@ -80,9 +126,59 @@ export function PublishedTemplateCard({
     action()
   }
 
+  const menu =
+    menuOpen &&
+    createPortal(
+      <div
+        ref={menuRef}
+        className="fixed z-[200] min-w-[148px] -translate-x-full overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+        style={{ top: menuPos.top, left: menuPos.left }}
+        onClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        {isDefault ? (
+          <button
+            type="button"
+            onClick={() => runMenuAction(onOpen)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Eye className="size-3.5 shrink-0" />
+            Preview
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => runMenuAction(onOpen)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Pencil className="size-3.5 shrink-0" />
+            Edit
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => runMenuAction(onDuplicate)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
+        >
+          <Copy className="size-3.5 shrink-0" />
+          Duplicate
+        </button>
+        <button
+          type="button"
+          disabled={isDefault}
+          onClick={() => runMenuAction(onDelete)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
+        >
+          <Trash2 className="size-3.5 shrink-0" />
+          Delete
+        </button>
+      </div>,
+      document.body,
+    )
+
   return (
     <article
-      ref={cardRef}
+      ref={rowRef}
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -92,116 +188,95 @@ export function PublishedTemplateCard({
           onOpen()
         }
       }}
-      className={`group/card relative flex aspect-[1.586/1] w-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-xl border bg-white text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-blue-200/80 hover:shadow-[0_16px_40px_-12px_rgba(37,99,235,0.22)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
-        highlighted
-          ? "animate-template-highlight border-blue-400 shadow-[0_0_0_4px_rgba(59,130,246,0.12)] ring-2 ring-blue-200"
-          : "border-gray-200/90"
+      className={`group/row relative flex w-full min-w-0 cursor-pointer gap-4 px-4 py-4 text-left transition-colors hover:bg-gray-50/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 ${
+        highlighted ? "animate-template-highlight bg-blue-50/40" : ""
       }`}
     >
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="truncate text-[14px] font-semibold text-gray-900 transition-colors group-hover/row:text-blue-700">
+                {record.name}
+              </h3>
+              {isDefault && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                  Default
+                </span>
+              )}
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${status.className}`}
+              >
+                {status.label}
+              </span>
+            </div>
+
+            {isDefault ? (
+              <p className="mt-1 text-[11px] text-gray-500">
+                Not editable · Preview only
+              </p>
+            ) : (
+              <p className="mt-1 text-[11px] text-gray-500">
+                Created {formatTemplateEditedAt(record.publishedAt)}
+                <span
+                  className="mx-2 text-[14px] font-semibold leading-none text-gray-400"
+                  aria-hidden
+                >
+                  ·
+                </span>
+                {record.quotesSent.toLocaleString()} quote
+                {record.quotesSent === 1 ? "" : "s"} sent
+              </p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80 sm:inline-flex sm:items-center sm:gap-1">
+              <span className="font-mono text-[9px] text-gray-500">{`{ }`}</span>
+              {record.variableCount} var{record.variableCount === 1 ? "" : "s"}
+            </span>
+            {conditionsLabel && (
+              <span className="hidden rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80 sm:inline-flex">
+                {conditionsLabel}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <p className="text-[12px] leading-relaxed text-gray-600">
+          {conditionsSummary}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2 sm:hidden">
+          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80">
+            <span className="font-mono text-[9px] text-gray-500">{`{ }`}</span>
+            {record.variableCount} var{record.variableCount === 1 ? "" : "s"}
+          </span>
+          {conditionsLabel && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80">
+              {conditionsLabel}
+            </span>
+          )}
+        </div>
+      </div>
+
       <div
-        ref={menuRef}
-        className="absolute right-3 top-3 z-50"
+        className="relative shrink-0 self-start"
         onClick={(event) => event.stopPropagation()}
       >
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
-          className="inline-flex size-7 items-center justify-center rounded-md border border-gray-200/80 bg-white/95 text-gray-500 shadow-sm backdrop-blur-sm transition-colors hover:bg-white hover:text-gray-800"
+          className="inline-flex size-8 items-center justify-center rounded-md border border-gray-200/80 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-800"
           aria-label="Template actions"
           aria-expanded={menuOpen}
+          aria-haspopup="menu"
         >
           <Ellipsis className="size-4" />
         </button>
-
-        {menuOpen && (
-          <div className="absolute right-0 top-full z-50 mt-1 min-w-[148px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-            {isDefault ? (
-              <button
-                type="button"
-                onClick={() => runMenuAction(onOpen)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
-              >
-                <Eye className="size-3.5 shrink-0" />
-                Preview
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => runMenuAction(onOpen)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
-              >
-                <Pencil className="size-3.5 shrink-0" />
-                Edit
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => runMenuAction(onDuplicate)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            >
-              <Copy className="size-3.5 shrink-0" />
-              Duplicate
-            </button>
-            <button
-              type="button"
-              disabled={isDefault}
-              onClick={() => runMenuAction(onDelete)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
-            >
-              <Trash2 className="size-3.5 shrink-0" />
-              Delete
-            </button>
-          </div>
-        )}
       </div>
-
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-gray-50">
-        <BuilderTemplateThumbnail template={record.template} compact fill />
-
-        <div className="pointer-events-none absolute right-3 top-12 z-10 flex flex-col items-end gap-1">
-          <span className="rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-medium text-gray-600 shadow-sm ring-1 ring-gray-200/80 backdrop-blur-sm">
-            <span className="font-mono text-[9px] text-gray-500">{`{ }`}</span>{" "}
-            {record.variableCount} var{record.variableCount === 1 ? "" : "s"}
-          </span>
-          <span className="rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-medium text-gray-600 shadow-sm ring-1 ring-gray-200/80 backdrop-blur-sm">
-            {conditionsLabel}
-          </span>
-        </div>
-      </div>
-
-      <div className="relative z-0 flex shrink-0 flex-col justify-center gap-1 border-t border-gray-100 bg-white px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="min-w-0 truncate text-[14px] font-semibold text-gray-900 transition-colors group-hover/card:text-blue-700">
-            {record.name}
-          </h3>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {isDefault && (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
-                Default
-              </span>
-            )}
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${status.className}`}
-            >
-              {status.label}
-            </span>
-          </div>
-        </div>
-        {isDefault ? (
-          <p className="truncate text-[11px] text-gray-500">
-            Not editable · Preview only
-          </p>
-        ) : (
-          <p className="truncate text-[11px] text-gray-500">
-            Created {formatTemplateEditedAt(record.publishedAt)}
-            <span className="mx-2 text-[14px] font-semibold leading-none text-gray-400" aria-hidden>
-              ·
-            </span>
-            {record.quotesSent.toLocaleString()} quote
-            {record.quotesSent === 1 ? "" : "s"} sent
-          </p>
-        )}
-      </div>
+      {menu}
     </article>
   )
 }

@@ -1,8 +1,5 @@
 import { PreviewExportActions } from "@/components/prompt-builder/PreviewExportActions"
-import { PreviewPersonaPicker } from "@/components/prompt-builder/PreviewPersonaPicker"
-import { PreviewScenarioPicker } from "@/components/prompt-builder/PreviewScenarioPicker"
 import { TemplateConditionStrip } from "@/components/prompt-builder/TemplateConditionStrip"
-import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { Eye, Pencil } from "lucide-react"
 import type { Ref, RefObject } from "react"
@@ -70,36 +67,25 @@ export function CanvasToolbarRow({
   className,
   suppressActions = false,
 }: ToolbarRowProps) {
-  const editorMode = usePromptBuilderStore((s) => s.editorMode)
-  const isPreview = editorMode === "preview"
   const isFloating = variant === "floating"
 
   return (
-    <div className={`flex w-full flex-col gap-2 ${className ?? ""}`}>
-      <div
-        className={`flex w-full items-center gap-x-3 ${
-          isFloating ? "flex-nowrap justify-between" : "flex-wrap gap-y-2"
-        }`}
-      >
-        <div className="flex min-w-0 shrink-0 items-center gap-3">
-          {isPreview && (
-            <>
-              <PreviewScenarioPicker variant={variant} className="min-w-0 shrink-0" />
-              <PreviewPersonaPicker />
-            </>
-          )}
-        </div>
-        {!isFloating && !suppressActions && <div className="min-w-0 flex-1" />}
-        {!suppressActions && (
-          <CanvasDocumentActions
-            documentRef={documentRef}
-            variant={variant}
-            className="shrink-0"
-          />
-        )}
+    <div
+      className={`flex w-full items-center gap-x-3 ${
+        isFloating ? "flex-nowrap justify-between" : "flex-wrap gap-y-2"
+      } ${className ?? ""}`}
+    >
+      <div className="flex min-w-0 shrink-0 items-center gap-3">
+        <TemplateConditionStrip variant={variant} />
       </div>
-
-      <TemplateConditionStrip variant={variant} />
+      {!isFloating && !suppressActions && <div className="min-w-0 flex-1" />}
+      {!suppressActions && (
+        <CanvasDocumentActions
+          documentRef={documentRef}
+          variant={variant}
+          className="shrink-0"
+        />
+      )}
     </div>
   )
 }
@@ -115,20 +101,12 @@ export function CanvasInlineToolbar({
   anchorRef,
   suppressActions = false,
 }: InlineToolbarProps) {
-  const isSalesPreview = useIsSalesPreview()
-
   return (
     <div ref={anchorRef} className="mb-4">
       <CanvasToolbarRow
         documentRef={documentRef}
         suppressActions={suppressActions}
       />
-      {isSalesPreview && (
-        <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
-          Previewing as a salesperson — edit unlocked fields; locked blocks stay
-          read-only at quote time.
-        </p>
-      )}
     </div>
   )
 }

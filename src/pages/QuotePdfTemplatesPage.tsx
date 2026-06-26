@@ -71,6 +71,7 @@ export function QuotePdfTemplatesPage() {
     () => hasTemplateWithRoutingConditions(displayTemplates),
     [displayTemplates],
   )
+  const [firstCreateModalOpen, setFirstCreateModalOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [processingOpen, setProcessingOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
@@ -133,6 +134,7 @@ export function QuotePdfTemplatesPage() {
   }, [highlightTemplateId])
 
   useEffect(() => {
+    setFirstCreateModalOpen(false)
     setCreateModalOpen(false)
     setLibraryQuery(DEFAULT_TEMPLATE_LIBRARY_QUERY)
     if (demoView === "empty") {
@@ -229,6 +231,7 @@ export function QuotePdfTemplatesPage() {
   )
 
   const handleGenerate = useCallback((files: File[]) => {
+    setFirstCreateModalOpen(false)
     setCreateModalOpen(false)
     setPendingFiles(files)
     setUploadedFileNames(files.map((file) => file.name))
@@ -237,14 +240,37 @@ export function QuotePdfTemplatesPage() {
     setProcessingOpen(true)
   }, [])
 
+  const handleGuidedComplete = useCallback((brief: string) => {
+    setFirstCreateModalOpen(false)
+    setCreateModalOpen(false)
+    setPendingFiles([])
+    setUploadedFileNames([])
+    setHasUploads(false)
+    setCreationBrief(brief)
+    setProcessingOpen(true)
+  }, [])
+
+  const openNewTemplate = useCallback(() => {
+    if (!hasUserCreatedTemplate) {
+      setFirstCreateModalOpen(true)
+      return
+    }
+    setCreateModalOpen(true)
+  }, [hasUserCreatedTemplate])
+
   const handleStartBlank = useCallback(() => {
     const id = createId("tpl")
     const template = createBlankBuilderTemplate(id)
     navigateToPromptBuilder(navigate, { template, name: template.name }, id)
   }, [navigate])
 
-  const firstTemplateModalVisible = !hasTemplates && !processingOpen
-  const newTemplateModalVisible = createModalOpen && !processingOpen
+  const firstCreateModalVisible = firstCreateModalOpen && !processingOpen
+  const newTemplateModalVisible =
+    createModalOpen && hasUserCreatedTemplate && !processingOpen
+
+  const closeFirstCreateModal = useCallback(() => {
+    setFirstCreateModalOpen(false)
+  }, [])
 
   const closeCreateModal = useCallback(() => {
     setCreateModalOpen(false)
@@ -278,16 +304,16 @@ export function QuotePdfTemplatesPage() {
               Quote PDF templates
             </h1>
           </div>
-          {hasTemplates &&
+          {(hasTemplates || !hasUserCreatedTemplate) &&
             (hasUserCreatedTemplate ? (
               <NewTemplateMenu
-                onGenerateFromPdf={() => setCreateModalOpen(true)}
+                onGenerateFromPdf={openNewTemplate}
                 onStartBlank={handleStartBlank}
               />
             ) : (
               <button
                 type="button"
-                onClick={() => setCreateModalOpen(true)}
+                onClick={openNewTemplate}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 shadow-sm hover:bg-gray-50"
               >
                 <Plus className="size-3.5" />
@@ -321,6 +347,26 @@ export function QuotePdfTemplatesPage() {
         </div>
       )}
 
+      {!hasTemplates && (
+        <div className="flex flex-1 flex-col items-center justify-center px-8 py-24 text-center">
+          <h2 className="text-[18px] font-semibold text-gray-900">
+            Create your first quote PDF template
+          </h2>
+          <p className="mt-2 max-w-md text-[13px] leading-relaxed text-gray-500">
+            Upload sample quotes or answer a few questions — we&apos;ll draft a
+            template you can refine in the studio.
+          </p>
+          <button
+            type="button"
+            onClick={openNewTemplate}
+            className="mt-6 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2.5 text-[13px] font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="size-4" />
+            New template
+          </button>
+        </div>
+      )}
+
       {hasTemplates && (
         <div className="px-8 py-8">
           {showLibraryControls && (
@@ -337,7 +383,7 @@ export function QuotePdfTemplatesPage() {
               onClear={() => setLibraryQuery(DEFAULT_TEMPLATE_LIBRARY_QUERY)}
             />
           ) : (
-            <div className="grid grid-cols-3 gap-8">
+            <div className="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm divide-y divide-gray-100">
               {filteredTemplates.map((record) => (
                 <PublishedTemplateCard
                   key={record.id}
@@ -355,10 +401,10 @@ export function QuotePdfTemplatesPage() {
       )}
 
       <CreateQuoteTemplateModal
-        open={firstTemplateModalVisible}
-        onClose={closeCreateModal}
-        dismissible={false}
+        open={firstCreateModalVisible}
+        onClose={closeFirstCreateModal}
         onGenerate={handleGenerate}
+        onGuidedComplete={handleGuidedComplete}
       />
 
       <CreateAdditionalTemplateModal

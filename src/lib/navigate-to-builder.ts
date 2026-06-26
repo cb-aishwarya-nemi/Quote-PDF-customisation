@@ -22,6 +22,7 @@ export type BuilderNavigationState = {
   generationStepLabels?: string[]
   creationBrief?: string
   uploadedFileNames?: string[]
+  extractionSummary?: PdfExtractionSummary
 }
 
 export function promptBuilderPath(templateId?: string) {
@@ -80,6 +81,7 @@ export function navigateToPromptBuilder(
       generationStepLabels,
       creationBrief: options?.creationBrief,
       uploadedFileNames: options?.uploadedFileNames,
+      extractionSummary: options?.extractionSummary,
     },
   })
 }

@@ -1,7 +1,8 @@
 import {
-  buildBuilderTemplate,
   createBuilderBlockWithContent,
   createBuilderTemplate,
+  mergeBlockContent,
+  normalizeBuilderBlocks,
 } from "@/lib/create-builder-template"
 import { createId } from "@/lib/create-id"
 import { deriveTemplateNameFromFiles } from "@/lib/derive-template-from-creation"
@@ -17,6 +18,7 @@ import type {
   BuilderTemplate,
   ConditionalSegment,
 } from "@/types/prompt-builder"
+import { derivePdfFieldMappings, type PdfFieldMapping } from "@/lib/pdf-field-mappings"
 
 export type PdfExtractionSummary = {
   sourceFileName: string
@@ -24,6 +26,7 @@ export type PdfExtractionSummary = {
   detectedSections: BuilderBlockType[]
   filledBlocks: BuilderBlockType[]
   usedFallback: boolean
+  fieldMappings: PdfFieldMapping[]
 }
 
 type SectionAnchor = {
@@ -395,7 +398,7 @@ function orderDetectedBlocks(
 function buildBlocksFromDocument(
   doc: PdfDocumentText,
   logoAsset?: { logoUrl: string; logoFileName: string },
-): { blocks: BuilderBlock[]; summary: Omit<PdfExtractionSummary, "sourceFileName" | "pageCount"> } {
+): { blocks: BuilderBlock[]; summary: Omit<PdfExtractionSummary, "sourceFileName" | "pageCount" | "fieldMappings"> } {
   const anchors = findSectionAnchors(doc.fullText)
   const pricingFallback =
     anchors.every((anchor) => anchor.type !== "pricing") &&
@@ -496,7 +499,28 @@ export async function extractTemplateFromFiles(
 
   onProgress?.("Applying layout rules")
   const name = deriveTemplateNameFromFiles(files)
-  const template = buildBuilderTemplate(templateId, blocks, name)
+  const defaultTemplate = createBuilderTemplate(templateId, { name })
+  const extractedByType = new Map(blocks.map((block) => [block.type, block]))
+
+  const mergedBlocks = defaultTemplate.blocks.map((block) => {
+    const extracted = extractedByType.get(block.type)
+    if (!extracted) return block
+    return {
+      ...block,
+      content: mergeBlockContent(block.content, extracted.content),
+    }
+  })
+
+  const template: BuilderTemplate = {
+    ...defaultTemplate,
+    blocks: normalizeBuilderBlocks(mergedBlocks),
+  }
+
+  const extractedTemplate: BuilderTemplate = {
+    ...defaultTemplate,
+    blocks: normalizeBuilderBlocks(blocks),
+  }
+  const fieldMappings = derivePdfFieldMappings(extractedTemplate, doc.fullText)
 
   return {
     template,
@@ -504,6 +528,7 @@ export async function extractTemplateFromFiles(
       sourceFileName: doc.fileName,
       pageCount: doc.pageCount,
       ...summary,
+      fieldMappings,
     },
   }
 }

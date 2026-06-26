@@ -301,6 +301,22 @@ export function normalizeBuilderBlocks(blocks: BuilderBlock[]): BuilderBlock[] {
   }))
 }
 
+export function mergeBlockContent(
+  base: Record<string, unknown>,
+  overrides?: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!overrides) return base
+
+  const merged = { ...base }
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined || value === null) continue
+    if (typeof value === "string" && value.trim() === "") continue
+    if (Array.isArray(value) && value.length === 0) continue
+    merged[key] = value
+  }
+  return merged
+}
+
 export function createBuilderBlockWithContent(
   type: BuilderBlockType,
   order: number,
@@ -312,7 +328,7 @@ export function createBuilderBlockWithContent(
   }
   return {
     ...block,
-    content: { ...block.content, ...contentOverrides },
+    content: mergeBlockContent(block.content, contentOverrides),
   }
 }
 
@@ -325,6 +341,7 @@ export function buildBuilderTemplate(
     id,
     name: name ?? DEFAULT_QUOTE_TEMPLATE_NAME,
     displayCondition: null,
+    documentFooter: { ...DEFAULT_DOCUMENT_FOOTER },
     blocks: normalizeBuilderBlocks(blocks),
   }
 }

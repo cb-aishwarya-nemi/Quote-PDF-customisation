@@ -1,5 +1,6 @@
 import { AssistantMinimizeGlyph } from "@/components/common/AssistantMinimizeGlyph"
 import { AssistantProfileIcon } from "@/components/common/AssistantProfileIcon"
+import { PdfVariableMappingCard } from "@/components/prompt-builder/PdfVariableMappingCard"
 import { PublishChecklistMessage } from "@/components/prompt-builder/PublishChecklistMessage"
 import { deriveAgentSuggestions } from "@/lib/derive-agent-suggestions"
 import { derivePublishChecklist } from "@/lib/publish-checklist"
@@ -221,10 +222,13 @@ export function AgentChatPanel() {
                 msg.role === "user"
                   ? "bg-blue-600 text-white"
                   : "bg-gray-100 text-gray-800"
-              } ${msg.kind === "publish_checklist" ? "w-full max-w-full" : ""}`}
+              } ${msg.kind === "publish_checklist" || msg.kind === "pdf_variable_mapping" ? "w-full max-w-full" : ""}`}
             >
-              {msg.content && msg.kind !== "publish_checklist" && (
-                <p>{msg.content}</p>
+              {msg.content &&
+                msg.kind !== "publish_checklist" &&
+                msg.kind !== "pdf_variable_mapping" && <p>{msg.content}</p>}
+              {msg.kind === "pdf_variable_mapping" && (
+                <PdfVariableMappingCard content={msg.content} />
               )}
               {msg.kind === "publish_checklist" && (
                 <PublishChecklistMessage

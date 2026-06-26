@@ -1,3 +1,4 @@
+import { CanvasPageDocumentShell } from "@/components/prompt-builder/CanvasPageDocumentShell"
 import {
   CanvasDocumentActions,
   CanvasInlineToolbar,
@@ -6,8 +7,8 @@ import {
 import { CustomPageEditor } from "@/components/prompt-builder/IntroPageEditor"
 import { IntroPageSection } from "@/components/prompt-builder/IntroPageSection"
 import { PageBlockCanvas } from "@/components/prompt-builder/PageBlockCanvas"
-import { TemplateDocumentFrame } from "@/components/prompt-builder/TemplateDocumentFrame"
-import { CANVAS_DOCUMENT_MAX_WIDTH } from "@/lib/canvas-constants"
+import { BuilderWorkflowTabs } from "@/components/prompt-builder/BuilderWorkflowTabs"
+import { CANVAS_DOCUMENT_MAX_WIDTH, BUILDER_WORKSPACE_BG } from "@/lib/canvas-constants"
 import { getBlocksForPage, getCustomPageKind } from "@/lib/page-blocks"
 import {
   deriveTemplatePages,
@@ -17,7 +18,18 @@ import {
 } from "@/lib/template-pages"
 import { groupBlocksForLayout } from "@/lib/block-layout"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+
+function scrollElementToTopOfContainer(
+  scrollEl: HTMLElement,
+  targetEl: HTMLElement,
+  insetTop = 12,
+) {
+  const scrollRect = scrollEl.getBoundingClientRect()
+  const targetRect = targetEl.getBoundingClientRect()
+  const nextTop = scrollEl.scrollTop + (targetRect.top - scrollRect.top) - insetTop
+  scrollEl.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" })
+}
 
 function useFloatingActionsOnScrollUp(
   scrollRef: React.RefObject<HTMLDivElement | null>,
@@ -85,15 +97,35 @@ export function QuoteCanvasArea() {
   const clearSelection = usePromptBuilderStore((s) => s.setSelectedBlockId)
   const isPreview = editorMode === "preview"
   const isSales = editorMode === "sales"
+  const showWorkflowTabs =
+    usePromptBuilderStore((s) => s.pdfFieldMappings.length) > 0
 
   const [introAddZoneHover, setIntroAddZoneHover] = useState(false)
   const hoverClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pageSectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const firstPageRef = useRef<HTMLDivElement | null>(null)
   const scrollSyncLockRef = useRef(false)
   const activePageIdRef = useRef(activePageId)
   const scrollFromObserverRef = useRef(false)
+  const prevEditorModeRef = useRef(editorMode)
 
   activePageIdRef.current = activePageId
+
+  useLayoutEffect(() => {
+    const enteredPreview =
+      editorMode === "preview" && prevEditorModeRef.current !== "preview"
+    prevEditorModeRef.current = editorMode
+
+    if (!enteredPreview) return
+
+    const scrollEl = scrollRef.current
+    const targetEl = firstPageRef.current ?? actionsAnchorRef.current
+    if (!scrollEl || !targetEl) return
+
+    requestAnimationFrame(() => {
+      scrollElementToTopOfContainer(scrollEl, targetEl)
+    })
+  }, [editorMode])
 
   const cancelHoverClear = useCallback(() => {
     if (hoverClearTimerRef.current) {
@@ -220,7 +252,8 @@ export function QuoteCanvasArea() {
 
   return (
     <div
-      className="relative flex min-w-0 flex-1 flex-col bg-[#e8eaed]"
+      className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      style={{ backgroundColor: BUILDER_WORKSPACE_BG }}
       onClick={() => !isPreview && clearSelection(null)}
     >
       {showFloatingActions && (
@@ -243,7 +276,15 @@ export function QuoteCanvasArea() {
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 pb-6 pt-3">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3"
+      >
+        {showWorkflowTabs && (
+          <div className="mb-3 flex justify-center">
+            <BuilderWorkflowTabs />
+          </div>
+        )}
         <div
           className="mx-auto w-full"
           style={{ maxWidth: CANVAS_DOCUMENT_MAX_WIDTH }}
@@ -255,7 +296,10 @@ export function QuoteCanvasArea() {
           />
 
           <div className="space-y-8">
-            {pages.map((page) => {
+            {pages.map((page, pageIndex) => {
+              const isFirstPage = pageIndex === 0
+              const showPreviewScenarioStrip = isPreview && isFirstPage
+
               if (page.kind === "custom") {
                 const customPage = findCustomPage(template, page.id)
                 const pageKind = customPage
@@ -267,6 +311,7 @@ export function QuoteCanvasArea() {
                     key={page.id}
                     ref={(node) => {
                       pageSectionRefs.current[page.id] = node
+                      if (isFirstPage) firstPageRef.current = node
                     }}
                     data-page-id={page.id}
                   >
@@ -276,17 +321,19 @@ export function QuoteCanvasArea() {
                         pageId={page.id}
                         isPreview={isPreview}
                         isSales={isSales}
+                        showPreviewScenarioStrip={showPreviewScenarioStrip}
                         onFrameClick={
                           !isPreview ? (e) => e.stopPropagation() : undefined
                         }
                       />
                     ) : (
-                      <TemplateDocumentFrame
+                      <CanvasPageDocumentShell
                         pageId={page.id}
+                        showPreviewScenarioStrip={showPreviewScenarioStrip}
                         onClick={!isPreview ? (e) => e.stopPropagation() : undefined}
                       >
                         <CustomPageEditor pageId={page.id} />
-                      </TemplateDocumentFrame>
+                      </CanvasPageDocumentShell>
                     )}
                   </div>
                 )
@@ -297,6 +344,7 @@ export function QuoteCanvasArea() {
                   key={page.id}
                   ref={(node) => {
                     pageSectionRefs.current[page.id] = node
+                    if (isFirstPage) firstPageRef.current = node
                   }}
                   data-page-id={page.id}
                 >
@@ -324,6 +372,7 @@ export function QuoteCanvasArea() {
                     isPreview={isPreview}
                     isSales={isSales}
                     exportRef={documentRef}
+                    showPreviewScenarioStrip={showPreviewScenarioStrip}
                     onFrameClick={
                       !isPreview ? (e) => e.stopPropagation() : undefined
                     }

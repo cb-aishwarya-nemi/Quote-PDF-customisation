@@ -54,6 +54,20 @@ function pastTenseGenerationStep(label: string): string {
   return label
 }
 
+export function makePdfVariableMappingMessage(
+  summary: PdfExtractionSummary,
+): ChatMessage | null {
+  if (!summary.fieldMappings.length) return null
+
+  return {
+    id: "pdf-variable-mapping",
+    role: "assistant",
+    kind: "pdf_variable_mapping",
+    content: `Mapped ${summary.fieldMappings.length} field${summary.fieldMappings.length === 1 ? "" : "s"} from your PDF. Review them in the Data mapping tab, then continue to the template canvas.`,
+    timestamp: new Date().toISOString(),
+  }
+}
+
 export function makeExtractionSummaryMessage(
   stepLabels: string[],
   summary: PdfExtractionSummary,

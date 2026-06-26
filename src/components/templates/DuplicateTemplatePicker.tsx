@@ -1,4 +1,3 @@
-import { BuilderTemplateThumbnail } from "@/components/templates/BuilderTemplateThumbnail"
 import type { PublishedBuilderTemplate } from "@/store/template-library-store"
 import { Copy } from "lucide-react"
 
@@ -46,13 +45,6 @@ export function DuplicateTemplatePicker({
         {templates.map((record) => (
           <li key={record.id}>
             <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-2.5 transition-colors hover:border-gray-300">
-              <div className="h-12 w-[72px] shrink-0 overflow-hidden rounded-md border border-gray-100">
-                <BuilderTemplateThumbnail
-                  template={record.template}
-                  compact
-                  fill
-                />
-              </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium text-gray-900">
                   {record.name}

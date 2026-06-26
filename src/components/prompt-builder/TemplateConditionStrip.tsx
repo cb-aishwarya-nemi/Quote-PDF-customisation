@@ -1,5 +1,4 @@
 import { ConditionBuilderPanel } from "@/components/prompt-builder/ConditionBuilderPanel"
-import { useIsTemplateEditMode } from "@/hooks/use-builder-editor-mode"
 import {
   describeConditionRule,
   hasConditions,
@@ -24,8 +23,6 @@ const PLACEHOLDER_MESSAGE =
 
 const HIGHLIGHT_MESSAGE =
   "Define quote-level conditions before publishing — more than one template exists"
-
-const STRIP_WIDTH_CLASS = "w-full"
 
 function describeStripMessage(
   displayCondition: BlockDisplayCondition,
@@ -61,7 +58,9 @@ export function TemplateConditionStrip({
   const setTemplateDisplayCondition = usePromptBuilderStore(
     (s) => s.setTemplateDisplayCondition,
   )
-  const isTemplateEdit = useIsTemplateEditMode()
+  const isTemplateEdit = editorMode === "edit"
+  const isPreview = editorMode === "preview"
+  const showEditChrome = isTemplateEdit || isPreview
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 })
   const stripRef = useRef<HTMLDivElement>(null)
@@ -73,9 +72,13 @@ export function TemplateConditionStrip({
   const showStrip = hasMultipleTemplatesInLibrary(publishedTemplates)
   const message = describeStripMessage(
     displayCondition,
-    isTemplateEdit,
+    showEditChrome,
     highlighted && !hasCondition,
   )
+
+  useEffect(() => {
+    if (editorMode !== "edit") setOpen(false)
+  }, [editorMode])
 
   useEffect(() => {
     ensureInitialized()
@@ -135,7 +138,7 @@ export function TemplateConditionStrip({
 
   const menu =
     open &&
-    isTemplateEdit &&
+    editorMode === "edit" &&
     createPortal(
       <ConditionBuilderPanel
         ref={menuRef}
@@ -157,11 +160,11 @@ export function TemplateConditionStrip({
     <>
       <div
         ref={stripRef}
-        className={`${STRIP_WIDTH_CLASS} overflow-hidden rounded-lg border border-amber-200/90 bg-amber-50 transition-[box-shadow,ring-color] duration-300 ${
+        className={`w-fit max-w-full shrink-0 overflow-hidden rounded-lg border border-amber-200/90 bg-amber-50 transition-[box-shadow,ring-color] duration-300 ${
           highlighted && !hasCondition
             ? "ring-2 ring-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.25)]"
             : ""
-        } ${variant === "floating" ? "shadow-sm" : ""}`}
+        } ${variant === "floating" ? "shadow-sm" : ""} ${isPreview ? "pointer-events-none" : ""}`}
         onClick={(event) => event.stopPropagation()}
       >
         {isTemplateEdit ? (
@@ -171,7 +174,7 @@ export function TemplateConditionStrip({
               clearConditionStripHighlight()
               setOpen((value) => !value)
             }}
-            className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-amber-100/60"
+            className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-amber-100/60"
             aria-expanded={open}
             aria-label="Quote-level conditions"
             title={message}
@@ -181,7 +184,7 @@ export function TemplateConditionStrip({
               strokeWidth={2}
             />
             <p
-              className={`min-w-0 truncate text-[11px] leading-snug ${
+              className={`text-[11px] leading-snug ${
                 hasCondition || highlighted
                   ? "font-medium text-amber-950"
                   : "text-amber-900/90"
@@ -190,9 +193,29 @@ export function TemplateConditionStrip({
               {message}
             </p>
           </button>
+        ) : showEditChrome ? (
+          <div
+            className="inline-flex max-w-full items-center gap-2 px-3 py-1.5"
+            title={message}
+            aria-label="Quote-level conditions"
+          >
+            <Filter
+              className={`size-3.5 shrink-0 ${hasCondition ? "text-amber-800" : "text-amber-700/80"}`}
+              strokeWidth={2}
+            />
+            <p
+              className={`text-[11px] leading-snug ${
+                hasCondition || highlighted
+                  ? "font-medium text-amber-950"
+                  : "text-amber-900/90"
+              }`}
+            >
+              {message}
+            </p>
+          </div>
         ) : (
           <div
-            className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5"
+            className="inline-flex max-w-full items-center gap-2 px-3 py-1.5"
             title={message}
           >
             <Filter
@@ -200,7 +223,7 @@ export function TemplateConditionStrip({
               strokeWidth={2}
             />
             <p
-              className={`min-w-0 truncate text-[11px] leading-snug ${
+              className={`text-[11px] leading-snug ${
                 hasCondition || highlighted
                   ? "font-medium text-amber-950"
                   : "text-amber-900/90"
