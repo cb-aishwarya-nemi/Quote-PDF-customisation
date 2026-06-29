@@ -3,7 +3,7 @@ import { flushBuilderAutosave, useBuilderAutosave } from "@/hooks/use-builder-au
 import { TEMPLATE_NAME_PLACEHOLDER } from "@/lib/create-builder-template"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
-import { ChevronRight } from "lucide-react"
+import { ArrowRight, ChevronRight } from "lucide-react"
 import { useEffect, useMemo, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -12,10 +12,16 @@ export function PromptBuilderHeader() {
   const template = usePromptBuilderStore((s) => s.template)
   const setTemplateName = usePromptBuilderStore((s) => s.setTemplateName)
   const requestPublish = usePromptBuilderStore((s) => s.requestPublish)
+  const setBuilderWorkflowTab = usePromptBuilderStore((s) => s.setBuilderWorkflowTab)
+  const builderWorkflowTab = usePromptBuilderStore((s) => s.builderWorkflowTab)
+  const pdfFieldMappings = usePromptBuilderStore((s) => s.pdfFieldMappings)
   const ensureInitialized = useTemplateLibraryStore((s) => s.ensureInitialized)
   const publishedTemplates = useTemplateLibraryStore((s) => s.publishedTemplates)
   const { lastSavedAt, visible } = useBuilderAutosave()
   const nameInputRef = useRef<HTMLInputElement>(null)
+
+  const showDataMapping =
+    pdfFieldMappings.length > 0 && builderWorkflowTab === "data_mapping"
 
   const isPublished = useMemo(() => {
     if (!template) return false
@@ -35,6 +41,10 @@ export function PromptBuilderHeader() {
     ensureInitialized()
     flushBuilderAutosave()
     requestPublish()
+  }
+
+  const handleEditTemplate = () => {
+    setBuilderWorkflowTab("canvas")
   }
 
   return (
@@ -85,18 +95,32 @@ export function PromptBuilderHeader() {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
-        <AutosaveIndicator
-          lastSavedAt={lastSavedAt}
-          visible={visible}
-        />
-        <button
-          type="button"
-          onClick={handlePublish}
-          disabled={!template}
-          className="rounded bg-blue-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          {isPublished ? "Save and publish" : "Publish"}
-        </button>
+        {!showDataMapping && (
+          <AutosaveIndicator
+            lastSavedAt={lastSavedAt}
+            visible={visible}
+          />
+        )}
+        {showDataMapping ? (
+          <button
+            type="button"
+            onClick={handleEditTemplate}
+            disabled={!template}
+            className="inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            Edit template
+            <ArrowRight className="size-3.5" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={!template}
+            className="rounded bg-blue-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {isPublished ? "Save and publish" : "Publish"}
+          </button>
+        )}
       </div>
     </header>
   )

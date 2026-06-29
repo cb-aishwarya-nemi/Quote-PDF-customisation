@@ -19,6 +19,12 @@ const CATEGORY_BADGE_STYLES: Record<TemplateVariableCategory, string> = {
   custom: "bg-gray-100 text-gray-600 ring-gray-200",
 }
 
+export function getVariableCategoryPillClass(
+  category: TemplateVariableCategory,
+): string {
+  return `inline-flex max-w-full shrink-0 items-center rounded-full px-1.5 py-0.5 font-mono text-[9px] font-medium ring-1 ring-inset ${CATEGORY_BADGE_STYLES[category]}`
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")

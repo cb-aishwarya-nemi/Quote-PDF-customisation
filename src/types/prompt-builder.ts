@@ -1,3 +1,6 @@
+import type { PdfFieldMapping } from "@/lib/pdf-field-mappings"
+import type { PdfMappingLearning } from "@/lib/pdf-mapping-learnings"
+
 export type TemplateVariableCategory =
   | "quote"
   | "customer"
@@ -99,6 +102,13 @@ export type CustomTemplatePage = {
 /** Page id — `"quote"` for the main quote document, or a custom page id */
 export type TemplatePageId = string
 
+export type TemplatePdfImport = {
+  sourceFileName: string
+  sourcePdfDataUrl?: string
+  fieldMappings: PdfFieldMapping[]
+  mappingLearnings?: PdfMappingLearning[]
+}
+
 export type BuilderBlock = {
   id: string
   type: BuilderBlockType
@@ -120,15 +130,20 @@ export type BuilderTemplate = {
   /** Order of page ids (custom page ids + quote) */
   pageOrder?: TemplatePageId[]
   blocks: BuilderBlock[]
+  /** PDF upload provenance — restores data mapping when re-opening the editor */
+  pdfImport?: TemplatePdfImport
   /** Printed document footer — page numbers, quote-for-customer line */
   documentFooter?: DocumentFooterConfig
 }
 
 export type DocumentFooterConfig = {
+  /** Freeform footer text. Use `{page}` and `{customer}` for dynamic values. */
+  text?: string
+  /** @deprecated Legacy toggle — used only when `text` is unset */
   showPageNumber?: boolean
   /** @deprecated No longer shown in footer — use showCustomerName ("Quote for …") */
   showQuoteNumber?: boolean
-  /** When true, shows "Quote for {customer name}" */
+  /** @deprecated Legacy toggle — used only when `text` is unset */
   showCustomerName?: boolean
   /** Printed pages the quote section spans (for `3-5/5` style). */
   quotePageCount?: number

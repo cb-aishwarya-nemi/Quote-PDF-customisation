@@ -17,6 +17,7 @@ type Props = {
   rules: BlockDisplayCondition
   onChange: (rules: BlockDisplayCondition) => void
   title?: string
+  titleTone?: "label" | "description"
   className?: string
   style?: CSSProperties
 }
@@ -266,7 +267,7 @@ function RulePrefix({
 
 export const ConditionBuilderPanel = forwardRef<HTMLDivElement, Props>(
   function ConditionBuilderPanel(
-    { rules, onChange, title, className, style },
+    { rules, onChange, title, titleTone = "label", className, style },
     ref,
   ) {
   const { match, rules: normalized } = parseConditionInput(rules)
@@ -305,7 +306,13 @@ export const ConditionBuilderPanel = forwardRef<HTMLDivElement, Props>(
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+      <p
+        className={
+          titleTone === "description"
+            ? "text-[12px] font-medium leading-snug text-gray-700"
+            : "text-[10px] font-semibold uppercase tracking-wide text-gray-400"
+        }
+      >
         {title ?? "Show"}
       </p>
 

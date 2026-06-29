@@ -1,3 +1,4 @@
+import { withPersistedPdfImport } from "@/lib/template-pdf-import"
 import { useTemplateLibraryStore } from "@/store/template-library-store"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { lastPersistedAtByTemplateId, flushBuilderAutosave } from "@/lib/builder-autosave"
@@ -33,12 +34,20 @@ export function useBuilderAutosave() {
     }
 
     const commitSave = () => {
-      const current = usePromptBuilderStore.getState().template
+      const state = usePromptBuilderStore.getState()
+      const current = state.template
       if (!current || current.id !== templateId) return
+
+      const persistable = withPersistedPdfImport(current, {
+        pdfFieldMappings: state.pdfFieldMappings,
+        pdfSourceFileName: state.pdfSourceFileName,
+        pdfSourceDataUrl: state.pdfSourceDataUrl,
+        pdfMappingLearnings: state.pdfMappingLearnings,
+      })
 
       const record = useTemplateLibraryStore
         .getState()
-        .saveBuilderTemplateDraft(current)
+        .saveBuilderTemplateDraft(persistable)
       lastPersistedAtByTemplateId.set(templateId, record.updatedAt)
       setLastSavedAt(record.updatedAt)
     }
@@ -66,8 +75,16 @@ export function useBuilderAutosave() {
     }
 
     const unsubscribe = usePromptBuilderStore.subscribe((state, prevState) => {
-      if (state.template === prevState.template) return
       if (state.template?.id !== templateId) return
+
+      const templateChanged = state.template !== prevState.template
+      const pdfChanged =
+        state.pdfFieldMappings !== prevState.pdfFieldMappings ||
+        state.pdfMappingLearnings !== prevState.pdfMappingLearnings ||
+        state.pdfSourceFileName !== prevState.pdfSourceFileName ||
+        state.pdfSourceDataUrl !== prevState.pdfSourceDataUrl
+
+      if (!templateChanged && !pdfChanged) return
 
       if (skipNextChangeRef.current) {
         skipNextChangeRef.current = false

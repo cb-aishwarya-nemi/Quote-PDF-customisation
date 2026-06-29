@@ -1,7 +1,9 @@
 import { derivePublishChecklist, publishChecklistCanPublish } from "@/lib/publish-checklist"
 import { PUBLISH_INTERSTITIAL_MS } from "@/lib/publish-flow"
+import { findPreviewCustomer, scenarioForPreviewCustomer } from "@/data/preview-customers"
 import { createId } from "@/lib/create-id"
 import { flushBuilderAutosave } from "@/lib/builder-autosave"
+import { withPersistedPdfImport } from "@/lib/template-pdf-import"
 import { normalizeDocumentFooter } from "@/lib/document-footer"
 import {
   INLINE_FRAGMENTS_KEY,
@@ -70,12 +72,14 @@ import {
 import type { PdfFieldMapping } from "@/lib/pdf-field-mappings"
 import {
   applyPdfMappingToTemplate,
+  ensurePdfFieldMappingsReviewSet,
   getMappableVariables,
   normalizePdfFieldMapping,
 } from "@/lib/pdf-field-mappings"
 import {
   createMappingLearning,
   makeLearningAssistantMessage,
+  removeMappingLearnings,
   type PdfMappingLearning,
 } from "@/lib/pdf-mapping-learnings"
 import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
@@ -319,6 +323,7 @@ type PromptBuilderStore = {
   editorMode: BuilderEditorMode
   previewPersona: PreviewPersona
   activeScenario: PreviewScenario
+  activePreviewCustomerId: string | null
   messages: ChatMessage[]
   isAgentTyping: boolean
   ignoredValidationIssueIds: string[]
@@ -341,6 +346,7 @@ type PromptBuilderStore = {
   } | null
   pdfFieldMappings: PdfFieldMapping[]
   pdfSourceFileName: string | null
+  pdfSourceDataUrl: string | null
   pdfMappingLearnings: PdfMappingLearning[]
   builderWorkflowTab: BuilderWorkflowTab
 
@@ -373,6 +379,7 @@ type PromptBuilderStore = {
   setActivePageId: (pageId: string) => void
   setSelectedBlockId: (id: string | null) => void
   setBuilderWorkflowTab: (tab: BuilderWorkflowTab) => void
+  ensurePdfFieldMappingsReviewSet: () => void
   updatePdfFieldMapping: (
     id: string,
     patch: Partial<Pick<PdfFieldMapping, "pdfExcerpt" | "mappedValue">>,
@@ -380,6 +387,7 @@ type PromptBuilderStore = {
   remapPdfFieldMapping: (id: string, variableId: string) => void
   setPdfMappingFeedback: (id: string, feedback: "up" | "down" | null) => void
   setActiveScenario: (scenario: PreviewScenario) => void
+  setActivePreviewCustomer: (customerId: string | null) => void
   updateBlockContent: (blockId: string, content: Record<string, unknown>) => void
   updateBlockField: (blockId: string, field: string, value: unknown) => void
   reorderInlineFragments: (
@@ -954,6 +962,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   editorMode: "edit",
   previewPersona: "admin",
   activeScenario: PREVIEW_SCENARIOS[0],
+  activePreviewCustomerId: "cust-zenith",
   messages: [],
   isAgentTyping: false,
   ignoredValidationIssueIds: [],
@@ -964,6 +973,7 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   pendingIntroPdfImport: null,
   pdfFieldMappings: [],
   pdfSourceFileName: null,
+  pdfSourceDataUrl: null,
   pdfMappingLearnings: [],
   builderWorkflowTab: "canvas",
   activePageId: QUOTE_PAGE_ID,
@@ -1023,25 +1033,52 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       ]
     }
 
+    const normalizedTemplate = normalizeTemplatePages({
+      ...template,
+      blocks: normalizeBuilderBlocks(template.blocks),
+    })
+    const persistedPdfImport = normalizedTemplate.pdfImport
+    const rawMappings = (
+      options?.extractionSummary?.fieldMappings ??
+      persistedPdfImport?.fieldMappings ??
+      []
+    ).map(normalizePdfFieldMapping)
+    const pdfFieldMappings = ensurePdfFieldMappingsReviewSet(
+      rawMappings,
+      normalizedTemplate,
+    )
+    const pdfSourceFileName =
+      options?.extractionSummary?.sourceFileName ??
+      persistedPdfImport?.sourceFileName ??
+      null
+    const pdfSourceDataUrl =
+      options?.extractionSummary?.sourcePdfDataUrl ??
+      persistedPdfImport?.sourcePdfDataUrl ??
+      null
+    const pdfMappingLearnings = persistedPdfImport?.mappingLearnings ?? []
+    const isFreshPdfUpload = Boolean(options?.extractionSummary)
+
+    const defaultCustomer = findPreviewCustomer("cust-zenith")
+    const defaultScenario =
+      (defaultCustomer && scenarioForPreviewCustomer(defaultCustomer)) ??
+      PREVIEW_SCENARIOS[0]
+
     set({
-      template: normalizeTemplatePages({
-        ...template,
-        blocks: normalizeBuilderBlocks(template.blocks),
-      }),
+      template: normalizedTemplate,
       selectedBlockId: null,
       editorMode: "edit",
       previewPersona: "admin",
       messages,
-      activeScenario: PREVIEW_SCENARIOS[0],
+      activeScenario: defaultScenario,
+      activePreviewCustomerId: defaultCustomer?.id ?? null,
       pendingImagePdfImport: null,
       pendingIntroPdfImport: null,
-      pdfFieldMappings: (options?.extractionSummary?.fieldMappings ?? []).map(
-        normalizePdfFieldMapping,
-      ),
-      pdfSourceFileName: options?.extractionSummary?.sourceFileName ?? null,
-      pdfMappingLearnings: [],
+      pdfFieldMappings,
+      pdfSourceFileName,
+      pdfSourceDataUrl,
+      pdfMappingLearnings,
       builderWorkflowTab:
-        (options?.extractionSummary?.fieldMappings?.length ?? 0) > 0
+        isFreshPdfUpload && pdfFieldMappings.length > 0
           ? "data_mapping"
           : "canvas",
       ignoredValidationIssueIds: [],
@@ -1273,6 +1310,26 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   setBuilderWorkflowTab: (tab) => set({ builderWorkflowTab: tab }),
 
+  ensurePdfFieldMappingsReviewSet: () =>
+    set((s) => {
+      if (!s.template || s.pdfFieldMappings.length === 0) return s
+      const pdfFieldMappings = ensurePdfFieldMappingsReviewSet(
+        s.pdfFieldMappings,
+        s.template,
+      )
+      const unchanged =
+        pdfFieldMappings.length === s.pdfFieldMappings.length &&
+        pdfFieldMappings.every(
+          (mapping, index) =>
+            mapping.id === s.pdfFieldMappings[index]?.id &&
+            mapping.pdfExcerpt === s.pdfFieldMappings[index]?.pdfExcerpt &&
+            mapping.status === s.pdfFieldMappings[index]?.status &&
+            mapping.feedback === s.pdfFieldMappings[index]?.feedback,
+        )
+      if (unchanged) return s
+      return { pdfFieldMappings }
+    }),
+
   updatePdfFieldMapping: (id, patch) =>
     set((s) => {
       if (!s.template) return s
@@ -1332,6 +1389,9 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
           ? { key: current.variableKey, label: current.variableLabel }
           : undefined
 
+      const resolvedValue =
+        current.mappedValue.trim() || current.pdfExcerpt.trim()
+
       const nextMapping = normalizePdfFieldMapping({
         ...current,
         id: `${variable.blockId}:${variable.field}:${variable.key}`,
@@ -1344,7 +1404,8 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
         category: variable.category,
         source: "user",
         feedback: current.feedback === "down" ? "down" : current.feedback,
-        status: current.mappedValue.trim() ? "mapped" : current.status,
+        mappedValue: resolvedValue,
+        status: "mapped",
       })
 
       const pdfFieldMappings = s.pdfFieldMappings.map((mapping, mappingIndex) =>
@@ -1384,19 +1445,35 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       if (index < 0) return s
 
       const current = s.pdfFieldMappings[index]
+      if (current.feedback === feedback) return s
+
+      const removedLearningIds = s.pdfMappingLearnings
+        .filter((learning) => learning.id.startsWith(`learning-${id}-`))
+        .map((learning) => learning.id)
+
       const pdfFieldMappings = [...s.pdfFieldMappings]
       pdfFieldMappings[index] = { ...current, feedback }
 
+      const pdfMappingLearnings = removeMappingLearnings(
+        s.pdfMappingLearnings,
+        id,
+      )
+      const messages = s.messages.filter(
+        (message) =>
+          message.role !== "assistant" ||
+          !removedLearningIds.includes(message.id),
+      )
+
       if (!feedback) {
-        return { pdfFieldMappings }
+        return { pdfFieldMappings, pdfMappingLearnings, messages }
       }
 
       const learning = createMappingLearning(current, feedback)
-      const pdfMappingLearnings = [...s.pdfMappingLearnings, learning]
-      const reply = makeLearningAssistantMessage(pdfMappingLearnings)
-      const messages = reply
+      const nextLearnings = [...pdfMappingLearnings, learning]
+      const reply = makeLearningAssistantMessage(nextLearnings)
+      const nextMessages = reply
         ? [
-            ...s.messages,
+            ...messages,
             {
               id: learning.id,
               role: "assistant" as const,
@@ -1404,15 +1481,29 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
               timestamp: learning.createdAt,
             },
           ]
-        : s.messages
+        : messages
 
-      return { pdfFieldMappings, pdfMappingLearnings, messages }
+      return {
+        pdfFieldMappings,
+        pdfMappingLearnings: nextLearnings,
+        messages: nextMessages,
+      }
     }),
 
   setActivePageId: (pageId) =>
     set({ activePageId: pageId, selectedBlockId: null }),
 
   setActiveScenario: (scenario) => set({ activeScenario: scenario }),
+
+  setActivePreviewCustomer: (customerId) =>
+    set((state) => {
+      const customer = findPreviewCustomer(customerId)
+      const scenario = customer ? scenarioForPreviewCustomer(customer) : null
+      return {
+        activePreviewCustomerId: customer?.id ?? null,
+        activeScenario: scenario ?? state.activeScenario,
+      }
+    }),
 
   updateBlockContent: (blockId, content) =>
     set((s) => {
@@ -1988,20 +2079,35 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   },
 
   confirmPublish: () => {
-    const { template, ignoredValidationIssueIds } = get()
+    const {
+      template,
+      ignoredValidationIssueIds,
+      pdfFieldMappings,
+      pdfSourceFileName,
+      pdfSourceDataUrl,
+      pdfMappingLearnings,
+    } = get()
     if (!template) return null
 
     useTemplateLibraryStore.getState().ensureInitialized()
     const library = useTemplateLibraryStore.getState().publishedTemplates
+    const persistableTemplate = withPersistedPdfImport(template, {
+      pdfFieldMappings,
+      pdfSourceFileName,
+      pdfSourceDataUrl,
+      pdfMappingLearnings,
+    })
     const items = derivePublishChecklist({
-      template,
+      template: persistableTemplate,
       library,
       ignoredValidationIssueIds,
     })
 
     if (!publishChecklistCanPublish(items)) return null
 
-    return useTemplateLibraryStore.getState().publishBuilderTemplate(template)
+    return useTemplateLibraryStore
+      .getState()
+      .publishBuilderTemplate(persistableTemplate)
   },
 
   publishTemplate: (onComplete) => {

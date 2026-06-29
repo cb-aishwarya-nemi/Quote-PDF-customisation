@@ -11,6 +11,7 @@ export type PdfDocumentText = {
   pageCount: number
   pages: PdfPageText[]
   fullText: string
+  pdfDataUrl: string
 }
 
 type TextFragment = {
@@ -93,6 +94,7 @@ export async function extractTextFromPdfDataUrl(
     pageCount: pdf.numPages,
     pages,
     fullText,
+    pdfDataUrl,
   }
 }
 

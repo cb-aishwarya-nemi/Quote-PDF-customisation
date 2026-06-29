@@ -3,6 +3,7 @@ import { AssistantProfileIcon } from "@/components/common/AssistantProfileIcon"
 import { PdfVariableMappingCard } from "@/components/prompt-builder/PdfVariableMappingCard"
 import { PublishChecklistMessage } from "@/components/prompt-builder/PublishChecklistMessage"
 import { deriveAgentSuggestions } from "@/lib/derive-agent-suggestions"
+import { BUILDER_PANEL_HEADER_CLASS, BUILDER_STRIP_HEIGHT_CLASS } from "@/lib/canvas-constants"
 import { derivePublishChecklist } from "@/lib/publish-checklist"
 import { deriveTemplateValidationIssues } from "@/lib/template-validation"
 import { flushBuilderAutosave } from "@/hooks/use-builder-autosave"
@@ -188,8 +189,10 @@ export function AgentChatPanel() {
 
   return (
     <aside className="flex w-[340px] shrink-0 flex-col border-l border-gray-200 bg-white">
-      <div className="border-b border-gray-200 bg-gray-100 px-4 py-2">
-        <div className="flex items-center justify-between gap-2">
+      <div
+        className={`${BUILDER_PANEL_HEADER_CLASS} bg-gray-100 px-4 ${BUILDER_STRIP_HEIGHT_CLASS}`}
+      >
+        <div className="flex w-full items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <AssistantProfileIcon className="size-5 shrink-0" />
             <div className="min-w-0">

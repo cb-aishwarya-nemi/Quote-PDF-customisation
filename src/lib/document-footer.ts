@@ -16,6 +16,7 @@ const QUOTE_PRINTABLE_HEIGHT_PX =
   CONTENT_WIDTH_PX * (297 / 210) - 96
 
 export const DEFAULT_DOCUMENT_FOOTER: DocumentFooterConfig = {
+  text: "{page} · Quote for {customer}",
   showPageNumber: true,
   showQuoteNumber: false,
   showCustomerName: true,
@@ -28,6 +29,7 @@ export function normalizeDocumentFooter(
   footer?: DocumentFooterConfig | null,
 ): Required<DocumentFooterConfig> {
   return {
+    text: footer?.text ?? DEFAULT_DOCUMENT_FOOTER.text!,
     showPageNumber: footer?.showPageNumber ?? DEFAULT_DOCUMENT_FOOTER.showPageNumber!,
     showQuoteNumber: footer?.showQuoteNumber ?? DEFAULT_DOCUMENT_FOOTER.showQuoteNumber!,
     showCustomerName: footer?.showCustomerName ?? DEFAULT_DOCUMENT_FOOTER.showCustomerName!,
@@ -35,6 +37,40 @@ export function normalizeDocumentFooter(
     quoteNumber: footer?.quoteNumber ?? DEFAULT_DOCUMENT_FOOTER.quoteNumber!,
     customerName: footer?.customerName ?? DEFAULT_DOCUMENT_FOOTER.customerName!,
   }
+}
+
+/** Compose footer template text from legacy toggles when `text` was never saved. */
+export function buildLegacyFooterTemplateText(
+  footer: Pick<DocumentFooterConfig, "showPageNumber" | "showCustomerName">,
+): string {
+  const parts: string[] = []
+  if (footer.showPageNumber) parts.push("{page}")
+  if (footer.showCustomerName) parts.push("Quote for {customer}")
+  return parts.join(" · ")
+}
+
+/** Raw footer template for editing — stored text or legacy toggle composition. */
+export function resolveFooterEditText(template: BuilderTemplate): string {
+  const footer = template.documentFooter
+  if (footer && "text" in footer && typeof footer.text === "string") {
+    return footer.text
+  }
+  return buildLegacyFooterTemplateText(normalizeDocumentFooter(footer))
+}
+
+export function resolveFooterDisplayText(
+  template: BuilderTemplate,
+  pageId: string,
+  options?: { previewCustomerName?: string },
+): string {
+  const raw = resolveFooterEditText(template).trim()
+  if (!raw) return ""
+
+  const page = formatFooterPageNumber(template, pageId)
+  const customer =
+    options?.previewCustomerName?.trim() || resolveFooterCustomerName(template)
+
+  return raw.replace(/\{page\}/g, page).replace(/\{customer\}/g, customer)
 }
 
 export function findQuoteSummaryBlock(template: BuilderTemplate) {

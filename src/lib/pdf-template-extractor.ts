@@ -22,6 +22,7 @@ import { buildCompletePdfFieldMappings, type PdfFieldMapping } from "@/lib/pdf-f
 
 export type PdfExtractionSummary = {
   sourceFileName: string
+  sourcePdfDataUrl?: string
   pageCount: number
   detectedSections: BuilderBlockType[]
   filledBlocks: BuilderBlockType[]
@@ -530,6 +531,7 @@ export async function extractTemplateFromFiles(
     template,
     summary: {
       sourceFileName: doc.fileName,
+      sourcePdfDataUrl: doc.pdfDataUrl,
       pageCount: doc.pageCount,
       ...summary,
       fieldMappings,

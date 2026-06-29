@@ -188,15 +188,17 @@ export function PublishedTemplateCard({
           onOpen()
         }
       }}
-      className={`group/row relative flex w-full min-w-0 cursor-pointer gap-4 px-4 py-4 text-left transition-colors hover:bg-gray-50/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 ${
-        highlighted ? "animate-template-highlight bg-blue-50/40" : ""
+      className={`group/card relative w-[800px] cursor-pointer rounded-2xl border bg-white p-5 text-left shadow-sm transition-all hover:border-gray-300 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+        highlighted
+          ? "animate-template-highlight border-blue-200 bg-blue-50/40 ring-1 ring-blue-100"
+          : "border-gray-200/90"
       }`}
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h3 className="truncate text-[14px] font-semibold text-gray-900 transition-colors group-hover/row:text-blue-700">
+              <h3 className="truncate text-[14px] font-semibold text-gray-900 transition-colors group-hover/card:text-blue-700">
                 {record.name}
               </h3>
               {isDefault && (
@@ -211,70 +213,58 @@ export function PublishedTemplateCard({
               </span>
             </div>
 
-            {isDefault ? (
-              <p className="mt-1 text-[11px] text-gray-500">
-                Not editable · Preview only
-              </p>
-            ) : (
-              <p className="mt-1 text-[11px] text-gray-500">
-                Created {formatTemplateEditedAt(record.publishedAt)}
-                <span
-                  className="mx-2 text-[14px] font-semibold leading-none text-gray-400"
-                  aria-hidden
-                >
-                  ·
-                </span>
-                {record.quotesSent.toLocaleString()} quote
-                {record.quotesSent === 1 ? "" : "s"} sent
-              </p>
-            )}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80 sm:inline-flex sm:items-center sm:gap-1">
-              <span className="font-mono text-[9px] text-gray-500">{`{ }`}</span>
-              {record.variableCount} var{record.variableCount === 1 ? "" : "s"}
-            </span>
-            {conditionsLabel && (
-              <span className="hidden rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80 sm:inline-flex">
-                {conditionsLabel}
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80">
+                <span className="font-mono text-[9px] text-gray-500">{`{ }`}</span>
+                {record.variableCount} var{record.variableCount === 1 ? "" : "s"}
               </span>
-            )}
+              {conditionsLabel && (
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80">
+                  {conditionsLabel}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
 
-        <p className="text-[12px] leading-relaxed text-gray-600">
-          {conditionsSummary}
-        </p>
+          <p className="mt-2 text-[12px] leading-relaxed text-gray-600">
+            {conditionsSummary}
+          </p>
 
-        <div className="flex flex-wrap items-center gap-2 sm:hidden">
-          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80">
-            <span className="font-mono text-[9px] text-gray-500">{`{ }`}</span>
-            {record.variableCount} var{record.variableCount === 1 ? "" : "s"}
-          </span>
-          {conditionsLabel && (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80">
-              {conditionsLabel}
-            </span>
+          {isDefault ? (
+            <p className="mt-2 text-[11px] text-gray-500">
+              Not editable · Preview only
+            </p>
+          ) : (
+            <p className="mt-2 text-[11px] text-gray-500">
+              Created {formatTemplateEditedAt(record.publishedAt)}
+              <span
+                className="mx-2 text-[14px] font-semibold leading-none text-gray-400"
+                aria-hidden
+              >
+                ·
+              </span>
+              {record.quotesSent.toLocaleString()} quote
+              {record.quotesSent === 1 ? "" : "s"} sent
+            </p>
           )}
         </div>
-      </div>
 
-      <div
-        className="relative shrink-0 self-start"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          ref={triggerRef}
-          type="button"
-          onClick={() => setMenuOpen((open) => !open)}
-          className="inline-flex size-8 items-center justify-center rounded-md border border-gray-200/80 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-800"
-          aria-label="Template actions"
-          aria-expanded={menuOpen}
-          aria-haspopup="menu"
+        <div
+          className="relative shrink-0"
+          onClick={(event) => event.stopPropagation()}
         >
-          <Ellipsis className="size-4" />
-        </button>
+          <button
+            ref={triggerRef}
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="inline-flex size-8 items-center justify-center rounded-md border border-gray-200/80 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-800"
+            aria-label="Template actions"
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+          >
+            <Ellipsis className="size-4" />
+          </button>
+        </div>
       </div>
       {menu}
     </article>

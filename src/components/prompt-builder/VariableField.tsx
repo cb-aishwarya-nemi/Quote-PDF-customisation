@@ -2,6 +2,10 @@ import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
 import { VariableOptionsMenu } from "@/components/prompt-builder/VariableOptionsMenu"
 import { useCanEditBlockContent, useIsAdminPreview } from "@/hooks/use-builder-editor-mode"
 import {
+  useActivePreviewCustomer,
+  useIsViewingCustomerPreview,
+} from "@/hooks/use-active-preview-customer"
+import {
   getVariableDef,
   getVariableFallbacks,
   getVariableKeyOverrides,
@@ -11,6 +15,7 @@ import {
   resolveVariableDisplayValue,
   type VariableFieldDef,
 } from "@/lib/derive-template-variables"
+import { resolvePreviewCustomerDisplayValue } from "@/lib/preview-customer-values"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import type { BuilderBlockType } from "@/types/prompt-builder"
 
@@ -47,6 +52,8 @@ export function VariableField({
 }: Props) {
   const isAdminPreview = useIsAdminPreview()
   const canEdit = useCanEditBlockContent(blockId)
+  const activeCustomer = useActivePreviewCustomer()
+  const viewingCustomer = useIsViewingCustomerPreview()
   const blockContent = usePromptBuilderStore(
     (s) => s.template?.blocks.find((b) => b.id === blockId)?.content,
   )
@@ -56,7 +63,14 @@ export function VariableField({
   const removed = baseDef ? isVariableRemoved(content, field) : false
   const def = removed ? baseDef : resolveVariableDef(blockType, field, content, baseDef)
 
-  const displayValue = resolveVariableDisplayValue(value, content, field)
+  const displayValue = resolvePreviewCustomerDisplayValue(
+    activeCustomer,
+    blockType,
+    field,
+    def?.key,
+    resolveVariableDisplayValue(value, content, field),
+    getVariableFallbacks(content)[field] ?? "",
+  )
   const fieldWidth = multiline ? "full" : "hug"
 
   const whitespaceClass =
@@ -66,7 +80,7 @@ export function VariableField({
         ? "whitespace-pre-wrap"
         : "whitespace-nowrap"
 
-  if (isAdminPreview || !canEdit) {
+  if (isAdminPreview || !canEdit || viewingCustomer) {
     const display = displayValue || placeholder || "—"
     if (layout === "inline") {
       return <span className={`whitespace-nowrap ${className}`}>{display}</span>

@@ -72,3 +72,11 @@ function truncate(text: string, max: number): string {
   if (trimmed.length <= max) return trimmed
   return `${trimmed.slice(0, max - 1)}…`
 }
+
+export function removeMappingLearnings(
+  learnings: PdfMappingLearning[],
+  mappingId: string,
+): PdfMappingLearning[] {
+  const prefix = `learning-${mappingId}-`
+  return learnings.filter((learning) => !learning.id.startsWith(prefix))
+}

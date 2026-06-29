@@ -1,4 +1,5 @@
 import { AgentChatPanel } from "@/components/prompt-builder/AgentChatPanel"
+import { BuilderWorkflowTabsRegion } from "@/components/prompt-builder/BuilderWorkflowTabsRegion"
 import { PdfDataMappingPanel } from "@/components/prompt-builder/PdfDataMappingPanel"
 import { PublishInterstitial } from "@/components/prompt-builder/PublishInterstitial"
 import { PagesPanel } from "@/components/prompt-builder/PagesPanel"
@@ -22,6 +23,9 @@ export function PromptBuilderPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const initTemplate = usePromptBuilderStore((s) => s.initTemplate)
+  const ensurePdfFieldMappingsReviewSet = usePromptBuilderStore(
+    (s) => s.ensurePdfFieldMappingsReviewSet,
+  )
   const template = usePromptBuilderStore((s) => s.template)
   const publishingTemplateName = usePromptBuilderStore(
     (s) => s.publishingTemplateName,
@@ -103,6 +107,11 @@ export function PromptBuilderPage() {
   ])
 
   useEffect(() => {
+    if (!template || pdfFieldMappings.length === 0) return
+    ensurePdfFieldMappingsReviewSet()
+  }, [template?.id, pdfFieldMappings.length, ensurePdfFieldMappingsReviewSet])
+
+  useEffect(() => {
     if (!navState?.fromGeneration) {
       setShowSkeleton(false)
       return
@@ -129,21 +138,17 @@ export function PromptBuilderPage() {
             <PromptBuilderSkeleton />
           ) : (
             <div className="flex min-h-0 flex-1 overflow-hidden">
-              {showDataMapping ? (
-                <div
-                  className="w-[124px] shrink-0 border-r border-gray-200"
-                  style={{ backgroundColor: BUILDER_WORKSPACE_BG }}
-                  aria-hidden
-                />
-              ) : (
-                <PagesPanel />
-              )}
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                {showDataMapping ? (
-                  <PdfDataMappingPanel />
-                ) : (
-                  <QuoteCanvasArea />
-                )}
+                <BuilderWorkflowTabsRegion enabled={showWorkflowTabs}>
+                  {showDataMapping ? (
+                    <PdfDataMappingPanel />
+                  ) : (
+                    <div className="flex min-h-0 flex-1 overflow-hidden">
+                      <PagesPanel />
+                      <QuoteCanvasArea />
+                    </div>
+                  )}
+                </BuilderWorkflowTabsRegion>
               </div>
               <AgentChatPanel />
             </div>

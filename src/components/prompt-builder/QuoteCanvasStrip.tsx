@@ -1,3 +1,4 @@
+import { CustomerPreviewPicker } from "@/components/prompt-builder/CustomerPreviewPicker"
 import { PreviewExportActions } from "@/components/prompt-builder/PreviewExportActions"
 import { TemplateConditionStrip } from "@/components/prompt-builder/TemplateConditionStrip"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
@@ -29,6 +30,7 @@ export function CanvasDocumentActions({
     <div
       className={`flex shrink-0 items-center ${variant === "floating" ? "gap-2" : "gap-3"} ${className ?? ""}`}
     >
+      <TemplateConditionStrip variant="icon" />
       <PreviewExportActions documentRef={documentRef} variant={variant} />
       {isPreview ? (
         <button
@@ -76,7 +78,7 @@ export function CanvasToolbarRow({
       } ${className ?? ""}`}
     >
       <div className="flex min-w-0 shrink-0 items-center gap-3">
-        <TemplateConditionStrip variant={variant} />
+        <CustomerPreviewPicker />
       </div>
       {!isFloating && !suppressActions && <div className="min-w-0 flex-1" />}
       {!suppressActions && (
@@ -102,7 +104,7 @@ export function CanvasInlineToolbar({
   suppressActions = false,
 }: InlineToolbarProps) {
   return (
-    <div ref={anchorRef} className="mb-4">
+    <div ref={anchorRef} className="mb-2">
       <CanvasToolbarRow
         documentRef={documentRef}
         suppressActions={suppressActions}

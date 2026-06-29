@@ -1,5 +1,6 @@
 import type { BuilderWorkflowTab } from "@/store/prompt-builder-store"
-import { countReviewedMappings } from "@/lib/pdf-field-mappings"
+import { BUILDER_PANEL_HEADER_CLASS, BUILDER_STRIP_HEIGHT_CLASS } from "@/lib/canvas-constants"
+import { summarizeMappingCoverage } from "@/lib/pdf-field-mappings"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 
 const TABS: { id: BuilderWorkflowTab; label: string }[] = [
@@ -7,50 +8,54 @@ const TABS: { id: BuilderWorkflowTab; label: string }[] = [
   { id: "canvas", label: "Template canvas" },
 ]
 
-export function BuilderWorkflowTabs() {
+export function BuilderWorkflowTabs({ className = "" }: { className?: string }) {
   const activeTab = usePromptBuilderStore((s) => s.builderWorkflowTab)
   const setBuilderWorkflowTab = usePromptBuilderStore((s) => s.setBuilderWorkflowTab)
   const mappings = usePromptBuilderStore((s) => s.pdfFieldMappings)
-  const { reviewed, total } = countReviewedMappings(mappings)
+  const coverage = summarizeMappingCoverage(mappings)
 
-  if (total === 0) return null
+  if (coverage.total === 0) return null
 
   return (
-    <div
-      className="inline-flex items-center rounded-md bg-gray-100/90 p-px shadow-sm ring-1 ring-black/5"
-      role="tablist"
-      aria-label="Builder workflow"
+    <header
+      className={`${BUILDER_PANEL_HEADER_CLASS} justify-center bg-white ${BUILDER_STRIP_HEIGHT_CLASS} ${className}`}
     >
-      {TABS.map((tab) => {
-        const active = activeTab === tab.id
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => setBuilderWorkflowTab(tab.id)}
-            className={`inline-flex h-7 items-center gap-1 rounded-[5px] px-2.5 text-[11px] font-medium transition-all ${
-              active
-                ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/70"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {tab.label}
-            {tab.id === "data_mapping" && (
-              <span
-                className={`rounded px-1 py-px text-[9px] font-semibold leading-none ${
-                  active
-                    ? "bg-blue-50 text-blue-700"
-                    : "bg-gray-200/70 text-gray-600"
-                }`}
-              >
-                {reviewed}/{total}
-              </span>
-            )}
-          </button>
-        )
-      })}
-    </div>
+      <div
+        className="flex h-full items-center gap-8"
+        role="tablist"
+        aria-label="Builder workflow"
+      >
+        {TABS.map((tab) => {
+          const active = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setBuilderWorkflowTab(tab.id)}
+              className={`-mb-px flex h-full items-center gap-1.5 border-b-2 px-1 text-[13px] font-medium transition-colors ${
+                active
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+              }`}
+            >
+                {tab.label}
+                {tab.id === "data_mapping" && (
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                      active
+                        ? "bg-blue-50 text-blue-700"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {coverage.mapped}/{coverage.total}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+      </div>
+    </header>
   )
 }

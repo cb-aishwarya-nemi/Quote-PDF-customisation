@@ -1,18 +1,16 @@
 import { InlineEditable } from "@/components/prompt-builder/InlineEditable"
 import {
-  formatFooterPageNumber,
-  findQuoteSummaryBlock,
-  normalizeDocumentFooter,
-  resolveFooterCustomerName,
+  resolveFooterDisplayText,
+  resolveFooterEditText,
 } from "@/lib/document-footer"
 import {
   useCanEditBlockStructure,
   useIsAdminPreview,
   useIsPreviewMode,
 } from "@/hooks/use-builder-editor-mode"
+import { useActivePreviewCustomer } from "@/hooks/use-active-preview-customer"
 import { toPlainText } from "@/lib/rich-text"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
-import type { ReactNode } from "react"
 
 type Props = {
   pageId: string
@@ -20,90 +18,58 @@ type Props = {
 
 export function DocumentFooter({ pageId }: Props) {
   const template = usePromptBuilderStore((s) => s.template)
-  const updateBlockField = usePromptBuilderStore((s) => s.updateBlockField)
   const setDocumentFooter = usePromptBuilderStore((s) => s.setDocumentFooter)
+  const setSelectedBlockId = usePromptBuilderStore((s) => s.setSelectedBlockId)
   const isPreview = useIsPreviewMode()
   const isAdminPreview = useIsAdminPreview()
   const canEditStructure = useCanEditBlockStructure()
+  const activeCustomer = useActivePreviewCustomer()
 
   if (!template) return null
 
-  const footer = normalizeDocumentFooter(template.documentFooter)
-  const pageLabel = formatFooterPageNumber(template, pageId)
-  const customerName = resolveFooterCustomerName(template)
-  const quoteBlock = findQuoteSummaryBlock(template)
   const isReadOnly = isPreview || isAdminPreview || !canEditStructure
 
-  const parts: ReactNode[] = []
+  const previewCustomerName = activeCustomer?.values["customer.name"]?.trim()
+  const displayText = resolveFooterDisplayText(template, pageId, {
+    previewCustomerName,
+  })
+  const editText = resolveFooterEditText(template)
 
-  if (footer.showPageNumber && pageLabel) {
-    parts.push(
-      <span
-        key="page"
-        className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap tabular-nums text-gray-400"
-      >
-        <span>{pageLabel}</span>
-      </span>,
-    )
-  }
-
-  if (footer.showCustomerName) {
-    parts.push(
-      <span
-        key="quote-for"
-        className="inline-flex shrink-0 items-baseline whitespace-nowrap text-gray-500"
-      >
-        <span className="text-gray-400">Quote for </span>
-        {isReadOnly ? (
-          <span>{customerName || "—"}</span>
-        ) : quoteBlock ? (
-          <InlineEditable
-            blockId={quoteBlock.id}
-            value={String(quoteBlock.content.customerName ?? "")}
-            onChange={(value) =>
-              updateBlockField(quoteBlock.id, "customerName", toPlainText(value))
-            }
-            className="text-gray-500"
-            hoverAffordance={false}
-            width="hug"
-            enableFormatting={false}
-            enableVariablePicker={false}
-          />
-        ) : (
-          <InlineEditable
-            value={footer.customerName ?? ""}
-            onChange={(value) => setDocumentFooter({ customerName: toPlainText(value) })}
-            className="text-gray-500"
-            hoverAffordance={false}
-            width="hug"
-            enableFormatting={false}
-            enableVariablePicker={false}
-          />
-        )}
-      </span>,
-    )
-  }
-
-  if (parts.length === 0) return null
+  if (isReadOnly && !displayText.trim()) return null
 
   return (
     <footer
-      className="group/footer mt-8 shrink-0 border-t border-gray-100 pt-3"
+      className={`group/footer mt-8 shrink-0 border-t pt-3 transition-colors ${
+        isReadOnly
+          ? "border-gray-100"
+          : "border-gray-100 hover:border-gray-200 focus-within:border-gray-200"
+      }`}
       aria-label="Document footer"
       onClick={(event) => event.stopPropagation()}
+      onMouseDown={() => {
+        if (!isReadOnly) setSelectedBlockId(null)
+      }}
     >
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-medium">
-        {parts.map((part, index) => (
-          <span key={index} className="inline-flex items-center gap-3">
-            {index > 0 && (
-              <span className="text-gray-300" aria-hidden>
-                ·
-              </span>
-            )}
-            {part}
-          </span>
-        ))}
-      </div>
+      {isReadOnly ? (
+        <p className="whitespace-pre-wrap text-center text-[11px] font-medium text-gray-500">
+          {displayText}
+        </p>
+      ) : (
+        <InlineEditable
+          value={editText}
+          onChange={(value) =>
+            setDocumentFooter({ text: toPlainText(value) })
+          }
+          multiline
+          width="full"
+          lineBreaks="wrap"
+          enableFormatting={false}
+          enableVariablePicker
+          hoverAffordance={false}
+          placeholder="{page} · Quote for {customer}"
+          className="min-h-[2.5rem] text-center text-[11px] font-medium text-gray-500"
+        />
+      )}
     </footer>
   )
 }

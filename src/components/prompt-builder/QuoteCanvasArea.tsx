@@ -7,8 +7,7 @@ import {
 import { CustomPageEditor } from "@/components/prompt-builder/IntroPageEditor"
 import { IntroPageSection } from "@/components/prompt-builder/IntroPageSection"
 import { PageBlockCanvas } from "@/components/prompt-builder/PageBlockCanvas"
-import { BuilderWorkflowTabs } from "@/components/prompt-builder/BuilderWorkflowTabs"
-import { CANVAS_DOCUMENT_MAX_WIDTH, BUILDER_WORKSPACE_BG } from "@/lib/canvas-constants"
+import { CANVAS_DOCUMENT_MAX_WIDTH, BUILDER_WORKFLOW_TABS_OFFSET_CLASS, BUILDER_WORKSPACE_BG } from "@/lib/canvas-constants"
 import { getBlocksForPage, getCustomPageKind } from "@/lib/page-blocks"
 import {
   deriveTemplatePages,
@@ -17,6 +16,8 @@ import {
   resolveCustomPages,
 } from "@/lib/template-pages"
 import { groupBlocksForLayout } from "@/lib/block-layout"
+import { useRevealOnScrollUp } from "@/hooks/use-reveal-on-scroll-up"
+import { useBuilderScrollContainerRef } from "@/components/prompt-builder/builder-scroll-container"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
@@ -31,61 +32,22 @@ function scrollElementToTopOfContainer(
   scrollEl.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" })
 }
 
-function useFloatingActionsOnScrollUp(
-  scrollRef: React.RefObject<HTMLDivElement | null>,
-  anchorRef: React.RefObject<HTMLDivElement | null>,
-) {
-  const [showFloating, setShowFloating] = useState(false)
-  const lastScrollTop = useRef(0)
-  const anchorVisibleRef = useRef(true)
-
-  useEffect(() => {
-    const scrollEl = scrollRef.current
-    const anchorEl = anchorRef.current
-    if (!scrollEl || !anchorEl) return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        anchorVisibleRef.current = entry.isIntersecting
-        if (entry.isIntersecting) setShowFloating(false)
-      },
-      { root: scrollEl, threshold: 0 },
-    )
-    observer.observe(anchorEl)
-
-    const onScroll = () => {
-      const scrollTop = scrollEl.scrollTop
-      const delta = scrollTop - lastScrollTop.current
-
-      if (anchorVisibleRef.current) {
-        setShowFloating(false)
-      } else if (delta < -4) {
-        setShowFloating(true)
-      } else if (delta > 4) {
-        setShowFloating(false)
-      }
-
-      lastScrollTop.current = scrollTop
-    }
-
-    scrollEl.addEventListener("scroll", onScroll, { passive: true })
-    return () => {
-      observer.disconnect()
-      scrollEl.removeEventListener("scroll", onScroll)
-    }
-  }, [scrollRef, anchorRef])
-
-  return showFloating
-}
-
 const INTRO_HOVER_CLEAR_MS = 300
 
 export function QuoteCanvasArea() {
   const documentRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
+  const registerScrollContainer = useBuilderScrollContainerRef()
+  const setScrollRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setScrollElement(node)
+      registerScrollContainer(node)
+    },
+    [registerScrollContainer],
+  )
   const actionsAnchorRef = useRef<HTMLDivElement>(null)
-  const showFloatingActions = useFloatingActionsOnScrollUp(
-    scrollRef,
+  const { showFloating: showFloatingActions } = useRevealOnScrollUp(
+    scrollElement,
     actionsAnchorRef,
   )
 
@@ -118,14 +80,14 @@ export function QuoteCanvasArea() {
 
     if (!enteredPreview) return
 
-    const scrollEl = scrollRef.current
+    const scrollEl = scrollElement
     const targetEl = firstPageRef.current ?? actionsAnchorRef.current
     if (!scrollEl || !targetEl) return
 
     requestAnimationFrame(() => {
       scrollElementToTopOfContainer(scrollEl, targetEl)
     })
-  }, [editorMode])
+  }, [editorMode, scrollElement])
 
   const cancelHoverClear = useCallback(() => {
     if (hoverClearTimerRef.current) {
@@ -168,7 +130,7 @@ export function QuoteCanvasArea() {
     }
 
     const section = pageSectionRefs.current[activePageId]
-    const scrollEl = scrollRef.current
+    const scrollEl = scrollElement
     if (!section || !scrollEl) return
 
     const scrollRect = scrollEl.getBoundingClientRect()
@@ -185,10 +147,10 @@ export function QuoteCanvasArea() {
       scrollSyncLockRef.current = false
     }, 600)
     return () => clearTimeout(timer)
-  }, [activePageId])
+  }, [activePageId, scrollElement])
 
   useEffect(() => {
-    const scrollEl = scrollRef.current
+    const scrollEl = scrollElement
     if (!scrollEl || pages.length <= 1) return
 
     const observer = new IntersectionObserver(
@@ -220,7 +182,7 @@ export function QuoteCanvasArea() {
     }
 
     return () => observer.disconnect()
-  }, [pages, setActivePageId])
+  }, [pages, setActivePageId, scrollElement])
 
   if (!template) return null
 
@@ -257,7 +219,11 @@ export function QuoteCanvasArea() {
       onClick={() => !isPreview && clearSelection(null)}
     >
       {showFloatingActions && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-6 pt-3">
+        <div
+          className={`pointer-events-none absolute inset-x-0 z-30 px-6 pt-3 ${
+            showWorkflowTabs ? BUILDER_WORKFLOW_TABS_OFFSET_CLASS : "top-0"
+          }`}
+        >
           <div
             className="pointer-events-auto mx-auto w-full"
             style={{ maxWidth: CANVAS_DOCUMENT_MAX_WIDTH }}
@@ -277,14 +243,9 @@ export function QuoteCanvasArea() {
       )}
 
       <div
-        ref={scrollRef}
+        ref={setScrollRef}
         className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3"
       >
-        {showWorkflowTabs && (
-          <div className="mb-3 flex justify-center">
-            <BuilderWorkflowTabs />
-          </div>
-        )}
         <div
           className="mx-auto w-full"
           style={{ maxWidth: CANVAS_DOCUMENT_MAX_WIDTH }}
@@ -357,7 +318,7 @@ export function QuoteCanvasArea() {
 
                       {showIntroHoverBridge && (
                         <div
-                          className="relative z-10 -mt-2 h-10"
+                          className="relative z-10 -mt-1 h-3"
                           onPointerEnter={() => setIntroZoneHover(true)}
                           onPointerLeave={() => setIntroZoneHover(false)}
                           aria-hidden

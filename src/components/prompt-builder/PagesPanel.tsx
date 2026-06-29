@@ -1,5 +1,6 @@
 import { PageThumbnailPreview } from "@/components/prompt-builder/PageThumbnailPreview"
 import { useIsSalesMode, useIsTemplateEditMode } from "@/hooks/use-builder-editor-mode"
+import { BUILDER_STRIP_HEIGHT_CLASS, PAGES_PANEL_WIDTH_CLASS } from "@/lib/canvas-constants"
 import {
   deriveTemplatePages,
   findCustomPage,
@@ -28,32 +29,58 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { RemovePageButton } from "@/components/prompt-builder/RemovePageButton"
-import { BookOpen, FileText, GripVertical } from "lucide-react"
+import { FileText, BookOpen, GripVertical, Plus } from "lucide-react"
 
 function PageInsertLine({
   onAdd,
   position = "below",
+  revealOn = "page-item",
+  showLabel = false,
 }: {
   onAdd: () => void
   position?: "above" | "below"
+  revealOn?: "page-item" | "pages-panel"
+  showLabel?: boolean
 }) {
   const label =
     position === "above" ? "Add page above" : "Add page below"
 
+  const revealClasses =
+    revealOn === "pages-panel"
+      ? "group-hover/pages-panel:pointer-events-auto group-hover/pages-panel:max-h-8 group-hover/pages-panel:py-1.5 group-hover/pages-panel:opacity-100"
+      : "group-hover/page-item:pointer-events-auto group-hover/page-item:max-h-4 group-hover/page-item:py-1.5 group-hover/page-item:opacity-100"
+
   return (
     <div
-      className="pointer-events-none max-h-0 overflow-hidden py-0 opacity-0 transition-all duration-150 group-hover/page-item:pointer-events-auto group-hover/page-item:max-h-4 group-hover/page-item:py-1.5 group-hover/page-item:opacity-100"
+      className={`pointer-events-none max-h-0 overflow-hidden py-0 opacity-0 transition-all duration-150 ${revealClasses}`}
       onClick={(event) => event.stopPropagation()}
     >
-      <button
-        type="button"
-        onClick={onAdd}
-        className="flex w-full items-center px-0.5"
-        aria-label={label}
-        title={label}
-      >
-        <span className="h-0.5 w-full rounded-full bg-blue-300 transition-colors hover:bg-blue-500" />
-      </button>
+      {showLabel ? (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex w-full items-center gap-1 px-0.5"
+          aria-label={label}
+          title={label}
+        >
+          <span className="h-px flex-1 bg-blue-300 transition-colors hover:bg-blue-500" />
+          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-blue-500 bg-white px-1.5 py-0.5 text-[10px] font-medium text-blue-600 shadow-sm transition-colors hover:border-blue-600 hover:bg-blue-50">
+            <Plus className="size-2.5" />
+            {label}
+          </span>
+          <span className="h-px flex-1 bg-blue-300 transition-colors hover:bg-blue-500" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex w-full items-center px-0.5"
+          aria-label={label}
+          title={label}
+        >
+          <span className="h-0.5 w-full rounded-full bg-blue-300 transition-colors hover:bg-blue-500" />
+        </button>
+      )}
     </div>
   )
 }
@@ -249,9 +276,13 @@ export function PagesPanel() {
   }
 
   return (
-    <aside className="flex w-[124px] shrink-0 flex-col border-r border-gray-200 bg-white">
-      <div className="border-b border-gray-200 bg-gray-50/80 px-4 py-3">
-        <div className="flex items-center gap-2">
+    <aside
+      className={`flex ${PAGES_PANEL_WIDTH_CLASS} shrink-0 flex-col border-r border-gray-200 bg-white`}
+    >
+      <div
+        className={`flex shrink-0 items-center px-4 ${BUILDER_STRIP_HEIGHT_CLASS}`}
+      >
+        <div className="flex w-full items-center gap-2">
           <FileText className="size-3.5 shrink-0 text-gray-500" strokeWidth={1.75} />
           <h2 className="text-[13px] font-semibold text-gray-900">Pages</h2>
           <span className="ml-auto rounded-full bg-gray-200/80 px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-600">
@@ -260,7 +291,7 @@ export function PagesPanel() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div className="group/pages-panel flex-1 overflow-y-auto px-3 py-3">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -271,7 +302,7 @@ export function PagesPanel() {
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-0 pl-1">
-              {pages.map((page) => (
+              {pages.map((page, index) => (
                 <div key={page.id} className="group/page-item">
                   {isTemplateEdit && (
                     <PageInsertLine
@@ -286,7 +317,7 @@ export function PagesPanel() {
                     canDelete={canDeletePages && page.kind === "custom"}
                     onSelect={() => handleSelectPage(page.id)}
                   />
-                  {isTemplateEdit && (
+                  {isTemplateEdit && index < pages.length - 1 && (
                     <PageInsertLine
                       position="below"
                       onAdd={() => addPage(page.id, "after")}
@@ -294,6 +325,14 @@ export function PagesPanel() {
                   )}
                 </div>
               ))}
+              {isTemplateEdit && pages.length > 0 && (
+                <PageInsertLine
+                  position="below"
+                  revealOn="pages-panel"
+                  showLabel
+                  onAdd={() => addPage(pages[pages.length - 1].id, "after")}
+                />
+              )}
             </div>
           </SortableContext>
         </DndContext>

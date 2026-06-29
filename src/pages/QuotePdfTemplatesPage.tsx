@@ -368,22 +368,26 @@ export function QuotePdfTemplatesPage() {
       )}
 
       {hasTemplates && (
-        <div className="px-8 py-8">
+        <div className="flex flex-col items-center px-8 py-8">
           {showLibraryControls && (
-            <TemplateLibraryControls
-              query={libraryQuery}
-              totalCount={displayTemplates.length}
-              filteredCount={filteredTemplates.length}
-              onChange={setLibraryQuery}
-            />
+            <div className="mb-6 w-[800px]">
+              <TemplateLibraryControls
+                query={libraryQuery}
+                totalCount={displayTemplates.length}
+                filteredCount={filteredTemplates.length}
+                onChange={setLibraryQuery}
+              />
+            </div>
           )}
 
           {filteredTemplates.length === 0 ? (
-            <TemplateLibraryEmptyState
-              onClear={() => setLibraryQuery(DEFAULT_TEMPLATE_LIBRARY_QUERY)}
-            />
+            <div className="w-[800px]">
+              <TemplateLibraryEmptyState
+                onClear={() => setLibraryQuery(DEFAULT_TEMPLATE_LIBRARY_QUERY)}
+              />
+            </div>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm divide-y divide-gray-100">
+            <div className="flex w-full flex-col items-center gap-3">
               {filteredTemplates.map((record) => (
                 <PublishedTemplateCard
                   key={record.id}

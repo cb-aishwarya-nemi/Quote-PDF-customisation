@@ -18,7 +18,9 @@ import {
 } from "react"
 import { createPortal } from "react-dom"
 
-const PLACEHOLDER_MESSAGE =
+const PANEL_WIDTH_PX = 440
+
+export const TEMPLATE_CONDITION_MENU_TITLE =
   "Set the conditions that determine when this quote pdf will be used"
 
 const HIGHLIGHT_MESSAGE =
@@ -31,7 +33,7 @@ function describeStripMessage(
 ): string {
   if (!hasConditions(displayCondition)) {
     if (highlighted) return HIGHLIGHT_MESSAGE
-    return canEdit ? PLACEHOLDER_MESSAGE : "Used for all quotes"
+    return canEdit ? TEMPLATE_CONDITION_MENU_TITLE : "Used for all quotes"
   }
 
   const { match, rules } = parseConditionInput(displayCondition)
@@ -42,10 +44,15 @@ function describeStripMessage(
   return `Used when ${rules.map(describeConditionRule).join(join)}`
 }
 
+function menuTitle(highlighted: boolean, hasCondition: boolean): string {
+  if (highlighted && !hasCondition) return HIGHLIGHT_MESSAGE
+  return TEMPLATE_CONDITION_MENU_TITLE
+}
+
 export function TemplateConditionStrip({
   variant = "inline",
 }: {
-  variant?: "inline" | "floating"
+  variant?: "inline" | "floating" | "icon"
 }) {
   const template = usePromptBuilderStore((s) => s.template)
   const editorMode = usePromptBuilderStore((s) => s.editorMode)
@@ -61,6 +68,7 @@ export function TemplateConditionStrip({
   const isTemplateEdit = editorMode === "edit"
   const isPreview = editorMode === "preview"
   const showEditChrome = isTemplateEdit || isPreview
+  const isIcon = variant === "icon"
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 })
   const stripRef = useRef<HTMLDivElement>(null)
@@ -69,6 +77,7 @@ export function TemplateConditionStrip({
   const displayCondition = (template?.displayCondition ??
     null) as BlockDisplayCondition
   const hasCondition = hasConditions(displayCondition)
+  const conditionCount = parseConditionInput(displayCondition).rules.length
   const showStrip = hasMultipleTemplatesInLibrary(publishedTemplates)
   const message = describeStripMessage(
     displayCondition,
@@ -94,11 +103,14 @@ export function TemplateConditionStrip({
     const strip = stripRef.current
     if (!strip) return
     const rect = strip.getBoundingClientRect()
+    const left = isIcon
+      ? Math.max(8, rect.right - PANEL_WIDTH_PX)
+      : rect.left
     setMenuPos({
       top: rect.bottom + 4,
-      left: rect.left,
+      left,
     })
-  }, [])
+  }, [isIcon])
 
   useLayoutEffect(() => {
     if (!open) return
@@ -144,7 +156,8 @@ export function TemplateConditionStrip({
         ref={menuRef}
         className="fixed z-[200]"
         style={{ top: menuPos.top, left: menuPos.left }}
-        title="Use this template"
+        title={menuTitle(highlighted && !hasCondition, hasCondition)}
+        titleTone="description"
         rules={displayCondition}
         onChange={(condition) => {
           setTemplateDisplayCondition(condition)
@@ -155,6 +168,63 @@ export function TemplateConditionStrip({
       />,
       document.body,
     )
+
+  if (isIcon) {
+    const iconBtnClass = [
+      "relative inline-flex size-7 shrink-0 items-center justify-center rounded-md border bg-white transition-colors",
+      hasCondition
+        ? "border-amber-200 text-amber-700 hover:bg-amber-50"
+        : "border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800",
+      highlighted && !hasCondition
+        ? "ring-2 ring-amber-400 ring-offset-1"
+        : "",
+    ].join(" ")
+
+    const conditionBadge =
+      conditionCount > 0 ? (
+        <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-amber-600 px-1 py-px text-[9px] font-bold leading-none text-white ring-2 ring-white">
+          {conditionCount}
+        </span>
+      ) : null
+
+    const conditionAriaLabel =
+      conditionCount > 0
+        ? `Quote-level conditions, ${conditionCount} rule${conditionCount === 1 ? "" : "s"}`
+        : "Quote-level conditions"
+
+    return (
+      <>
+        <div ref={stripRef} onClick={(event) => event.stopPropagation()}>
+          {isTemplateEdit ? (
+            <button
+              type="button"
+              onClick={() => {
+                clearConditionStripHighlight()
+                setOpen((value) => !value)
+              }}
+              className={iconBtnClass}
+              aria-expanded={open}
+              aria-label={conditionAriaLabel}
+              title={message}
+            >
+              <Filter className="size-3.5" strokeWidth={2} />
+              {conditionBadge}
+            </button>
+          ) : (
+            <span
+              className={`${iconBtnClass} pointer-events-none`}
+              title={message}
+              aria-label={conditionAriaLabel}
+            >
+              <Filter className="size-3.5" strokeWidth={2} />
+              {conditionBadge}
+            </span>
+          )}
+        </div>
+        {menu}
+      </>
+    )
+  }
 
   return (
     <>

@@ -1,9 +1,11 @@
 import {
   BLOCK_TYPE_LABELS,
   deriveTemplateVariables,
+  getBlockFieldDefs,
   getEntitlementRowVariableDef,
   getPricingRowVariableDef,
   getVariableDef,
+  isVariableRemoved,
   resolveVariableDef,
 } from "@/lib/derive-template-variables"
 import type {
@@ -35,9 +37,11 @@ export type PdfFieldMapping = {
 }
 
 export function mappingSlotKey(input: {
-  blockId: string
+  blockId?: string
+  blockType?: BuilderBlockType
   field: string
 }): string {
+  if (input.blockType) return `${input.blockType}:${input.field}`
   return `${input.blockId}:${input.field}`
 }
 
@@ -311,27 +315,600 @@ function derivePdfFieldMappingsFromVariables(
     }))
 }
 
+function pushUnmappedMapping(
+  list: PdfFieldMapping[],
+  seen: Set<string>,
+  mappedSlots: Set<string>,
+  block: BuilderBlock,
+  field: string,
+  variableKey: string,
+  variableLabel: string,
+  category: TemplateVariableCategory,
+) {
+  const slotKey = mappingSlotKey({ blockType: block.type, field })
+  if (mappedSlots.has(slotKey) || seen.has(slotKey)) return
+  seen.add(slotKey)
+
+  list.push({
+    id: `unmapped:${block.id}:${field}`,
+    blockId: block.id,
+    blockType: block.type,
+    blockLabel: BLOCK_TYPE_LABELS[block.type],
+    field,
+    variableKey,
+    variableLabel,
+    category,
+    pdfExcerpt: "",
+    mappedValue: "",
+    status: "unmapped",
+    feedback: null,
+    source: "ai",
+  })
+}
+
+function collectUnmappedBlockMappings(
+  list: PdfFieldMapping[],
+  seen: Set<string>,
+  mappedSlots: Set<string>,
+  extractedBlock: BuilderBlock,
+  mergedBlock: BuilderBlock,
+) {
+  const block = mergedBlock
+
+  if (
+    block.type !== "pricing" &&
+    block.type !== "entitlements" &&
+    block.type !== "terms"
+  ) {
+    for (const def of getBlockFieldDefs(block.type)) {
+      if (isVariableRemoved(block.content, def.field)) continue
+      const resolved = resolveVariableDef(
+        block.type,
+        def.field,
+        block.content,
+        def,
+      )
+      if (!resolved) continue
+      const value = formatFieldValue(extractedBlock.content[def.field])
+      if (value) continue
+      pushUnmappedMapping(
+        list,
+        seen,
+        mappedSlots,
+        block,
+        def.field,
+        resolved.key,
+        resolved.label,
+        resolved.category,
+      )
+    }
+    return
+  }
+
+  if (block.type === "pricing") {
+    const rows =
+      (extractedBlock.content.rows as {
+        item: string
+        amount: string
+        description?: string
+      }[]) ?? []
+    rows.forEach((row, index) => {
+      const itemField = `rows[${index}].item`
+      const amountField = `rows[${index}].amount`
+      if (!row.item?.trim() && !isVariableRemoved(block.content, itemField)) {
+        const def = getPricingRowVariableDef(index, "item")
+        const resolved = resolveVariableDef(
+          block.type,
+          def.field,
+          block.content,
+          def,
+        )!
+        pushUnmappedMapping(
+          list,
+          seen,
+          mappedSlots,
+          block,
+          def.field,
+          resolved.key,
+          resolved.label,
+          resolved.category,
+        )
+      }
+      if (!row.amount?.trim() && !isVariableRemoved(block.content, amountField)) {
+        const def = getPricingRowVariableDef(index, "amount")
+        const resolved = resolveVariableDef(
+          block.type,
+          def.field,
+          block.content,
+          def,
+        )!
+        pushUnmappedMapping(
+          list,
+          seen,
+          mappedSlots,
+          block,
+          def.field,
+          resolved.key,
+          resolved.label,
+          resolved.category,
+        )
+      }
+    })
+
+    const subtotalDef = getBlockFieldDefs("pricing").find(
+      (def) => def.field === "subtotal",
+    )
+    if (
+      subtotalDef &&
+      !formatFieldValue(extractedBlock.content.subtotal) &&
+      !isVariableRemoved(block.content, "subtotal")
+    ) {
+      const resolved = resolveVariableDef(
+        block.type,
+        subtotalDef.field,
+        block.content,
+        subtotalDef,
+      )!
+      pushUnmappedMapping(
+        list,
+        seen,
+        mappedSlots,
+        block,
+        subtotalDef.field,
+        resolved.key,
+        resolved.label,
+        resolved.category,
+      )
+    }
+    return
+  }
+
+  if (block.type === "entitlements") {
+    const rows =
+      (extractedBlock.content.rows as {
+        name: string
+        limit: string
+        notes?: string
+      }[]) ?? []
+    rows.forEach((row, index) => {
+      const nameField = `rows[${index}].name`
+      const limitField = `rows[${index}].limit`
+      if (!row.name?.trim() && !isVariableRemoved(block.content, nameField)) {
+        const def = getEntitlementRowVariableDef(index, "name")
+        const resolved = resolveVariableDef(
+          block.type,
+          def.field,
+          block.content,
+          def,
+        )!
+        pushUnmappedMapping(
+          list,
+          seen,
+          mappedSlots,
+          block,
+          def.field,
+          resolved.key,
+          resolved.label,
+          resolved.category,
+        )
+      }
+      if (!row.limit?.trim() && !isVariableRemoved(block.content, limitField)) {
+        const def = getEntitlementRowVariableDef(index, "limit")
+        const resolved = resolveVariableDef(
+          block.type,
+          def.field,
+          block.content,
+          def,
+        )!
+        pushUnmappedMapping(
+          list,
+          seen,
+          mappedSlots,
+          block,
+          def.field,
+          resolved.key,
+          resolved.label,
+          resolved.category,
+        )
+      }
+    })
+    return
+  }
+
+  if (block.type === "terms") {
+    const segments = (extractedBlock.content.segments as { text?: string }[]) ?? []
+    segments.forEach((segment, index) => {
+      if (segment.text?.trim()) return
+      pushUnmappedMapping(
+        list,
+        seen,
+        mappedSlots,
+        block,
+        `segments[${index}].text`,
+        "quote.terms_body",
+        index === 0 ? "Terms body" : `Terms segment ${index + 1}`,
+        "quote",
+      )
+    })
+  }
+}
+
 function buildUnmappedMappings(
-  template: BuilderTemplate,
+  extractedTemplate: BuilderTemplate,
+  mergedTemplate: BuilderTemplate,
   mappedSlots: Set<string>,
 ): PdfFieldMapping[] {
-  return getMappableVariables(template)
-    .filter((variable) => !mappedSlots.has(mappingSlotKey(variable)))
-    .map((variable) => ({
-      id: `unmapped:${variable.id}`,
-      blockId: variable.blockId,
-      blockType: variable.blockType,
-      blockLabel: variable.blockLabel,
-      field: variable.field,
-      variableKey: variable.key,
-      variableLabel: variable.label,
-      category: variable.category,
-      pdfExcerpt: "",
-      mappedValue: "",
-      status: "unmapped" as const,
-      feedback: null,
-      source: "ai" as const,
-    }))
+  const unmapped: PdfFieldMapping[] = []
+  const seen = new Set<string>()
+
+  for (const extractedBlock of extractedTemplate.blocks) {
+    const mergedBlock = mergedTemplate.blocks.find(
+      (block) => block.type === extractedBlock.type,
+    )
+    if (!mergedBlock) continue
+    collectUnmappedBlockMappings(
+      unmapped,
+      seen,
+      mappedSlots,
+      extractedBlock,
+      mergedBlock,
+    )
+  }
+
+  return unmapped
+}
+
+const REVIEW_MAPPING_TOTAL = 10
+const REVIEW_MAPPED_TARGET = 9
+const REVIEW_UNMAPPED_TARGET = 1
+
+export const PDF_MAPPING_REVIEW_TOTAL = REVIEW_MAPPING_TOTAL
+
+/** Fixed mapped slots for the 9/10 review set. */
+const MAPPED_REVIEW_SLOTS = [
+  "company_details:name",
+  "quote_summary_header:quoteNumber",
+  "billed_to:name",
+  "pricing:rows[0].item",
+  "tcv_summary:amount",
+  "quote_summary_header:issued",
+  "billed_to:address",
+  "contract_details:paymentTerms",
+  "company_details:address",
+]
+
+/** Prefer an unmapped row that still has PDF text for the user to review. */
+const UNMAPPED_REVIEW_PRIORITY = [
+  "company_details:taxId",
+  "billed_to:contact",
+  "contract_details:salesperson",
+  "company_details:entity",
+  "ae_profile:email",
+  "billed_to:contactName",
+]
+
+function mappingPdfText(mapping: PdfFieldMapping): string {
+  return mapping.pdfExcerpt.trim() || mapping.mappedValue.trim()
+}
+
+function pickUnmappedReviewSlot(mappings: PdfFieldMapping[]): string {
+  const slotKey = (mapping: PdfFieldMapping) =>
+    mappingSlotKey({ blockType: mapping.blockType, field: mapping.field })
+  const bySlot = new Map(mappings.map((mapping) => [slotKey(mapping), mapping]))
+
+  for (const candidate of UNMAPPED_REVIEW_PRIORITY) {
+    const existing = bySlot.get(candidate)
+    if (existing && mappingPdfText(existing)) return candidate
+  }
+
+  for (const mapping of mappings) {
+    if (mapping.status === "unmapped" && mappingPdfText(mapping)) {
+      return slotKey(mapping)
+    }
+  }
+
+  // Use a mapped field that has PDF text — user still needs to confirm the variable.
+  for (let index = MAPPED_REVIEW_SLOTS.length - 1; index >= 0; index -= 1) {
+    const candidate = MAPPED_REVIEW_SLOTS[index]
+    const existing = bySlot.get(candidate)
+    if (existing && mappingPdfText(existing)) return candidate
+  }
+
+  for (const mapping of mappings) {
+    if (mappingPdfText(mapping)) return slotKey(mapping)
+  }
+
+  return UNMAPPED_REVIEW_PRIORITY[0]
+}
+
+function buildReviewSlotPlan(
+  mappings: PdfFieldMapping[],
+): { slot: string; role: "mapped" | "unmapped" }[] {
+  const slotKey = (mapping: PdfFieldMapping) =>
+    mappingSlotKey({ blockType: mapping.blockType, field: mapping.field })
+  const unmappedSlot = pickUnmappedReviewSlot(mappings)
+  const mappedSlots = MAPPED_REVIEW_SLOTS.filter((slot) => slot !== unmappedSlot)
+
+  while (mappedSlots.length < REVIEW_MAPPED_TARGET) {
+    const filler = mappings.find((mapping) => {
+      const key = slotKey(mapping)
+      return (
+        key !== unmappedSlot &&
+        !mappedSlots.includes(key) &&
+        mapping.status === "mapped" &&
+        mappingPdfText(mapping)
+      )
+    })
+    if (!filler) break
+    mappedSlots.push(slotKey(filler))
+  }
+
+  return [
+    ...mappedSlots.map((slot) => ({ slot, role: "mapped" as const })),
+    { slot: unmappedSlot, role: "unmapped" },
+  ]
+}
+
+function resolvePdfExcerptForReviewSlot(
+  slot: string,
+  mappings: PdfFieldMapping[],
+  mergedTemplate: BuilderTemplate,
+  fullText: string,
+): string {
+  const bySlot = new Map(
+    mappings.map((mapping) => [
+      mappingSlotKey({ blockType: mapping.blockType, field: mapping.field }),
+      mapping,
+    ]),
+  )
+  const existing = bySlot.get(slot)
+  if (existing) {
+    const fromMapping = mappingPdfText(existing)
+    if (fromMapping) {
+      return (
+        existing.pdfExcerpt.trim() ||
+        (fullText.trim()
+          ? findPdfExcerpt(fullText, existing.mappedValue)
+          : existing.mappedValue.trim())
+      )
+    }
+  }
+
+  const { blockType, field } = parseReviewSlot(slot)
+  const block = mergedTemplate.blocks.find((entry) => entry.type === blockType)
+  if (!block) return ""
+
+  const value = readReviewFieldValue(block, field) ?? ""
+  if (!value) return ""
+
+  return fullText.trim() ? findPdfExcerpt(fullText, value) : value
+}
+
+function parseReviewSlot(slot: string): { blockType: BuilderBlockType; field: string } {
+  const separator = slot.indexOf(":")
+  return {
+    blockType: slot.slice(0, separator) as BuilderBlockType,
+    field: slot.slice(separator + 1),
+  }
+}
+
+function resolveReviewFieldDef(
+  blockType: BuilderBlockType,
+  field: string,
+): ReturnType<typeof getVariableDef> {
+  const rowMatch = field.match(/^rows\[(\d+)\]\.(\w+)$/)
+  if (rowMatch) {
+    const index = Number(rowMatch[1])
+    const part = rowMatch[2]
+    if (blockType === "pricing" && (part === "item" || part === "amount")) {
+      return getPricingRowVariableDef(index, part)
+    }
+    if (blockType === "entitlements" && (part === "name" || part === "limit")) {
+      return getEntitlementRowVariableDef(index, part as "name" | "limit")
+    }
+  }
+
+  const segmentMatch = field.match(/^segments\[(\d+)\]\.text$/)
+  if (segmentMatch && blockType === "terms") {
+    const index = Number(segmentMatch[1])
+    return {
+      field,
+      key: "quote.terms_body",
+      label: index === 0 ? "Terms body" : `Terms segment ${index + 1}`,
+      category: "quote",
+    }
+  }
+
+  return getVariableDef(blockType, field)
+}
+
+function readReviewFieldValue(
+  block: BuilderBlock,
+  field: string,
+): string | null {
+  const rowMatch = field.match(/^rows\[(\d+)\]\.(\w+)$/)
+  if (rowMatch) {
+    const index = Number(rowMatch[1])
+    const key = rowMatch[2]
+    const rows = (block.content.rows as Record<string, unknown>[]) ?? []
+    return formatFieldValue(rows[index]?.[key])
+  }
+
+  const segmentMatch = field.match(/^segments\[(\d+)\]\.text$/)
+  if (segmentMatch) {
+    const index = Number(segmentMatch[1])
+    const segments = (block.content.segments as { text?: string }[]) ?? []
+    return formatFieldValue(segments[index]?.text)
+  }
+
+  return formatFieldValue(block.content[field])
+}
+
+function synthesizeReviewMapping(
+  mergedTemplate: BuilderTemplate,
+  slot: string,
+  role: "mapped" | "unmapped",
+  options?: {
+    source?: PdfFieldMapping
+    mappings?: PdfFieldMapping[]
+    fullText?: string
+  },
+): PdfFieldMapping | null {
+  const { source, mappings = [], fullText = "" } = options ?? {}
+
+  if (source) {
+    if (role === "unmapped") {
+      const demoted = demoteToUnmapped(source)
+      if (!demoted.pdfExcerpt.trim()) {
+        const excerpt = resolvePdfExcerptForReviewSlot(
+          slot,
+          mappings,
+          mergedTemplate,
+          fullText,
+        )
+        if (excerpt) return { ...demoted, pdfExcerpt: excerpt }
+      }
+      return demoted
+    }
+    if (source.status === "mapped") return { ...source, status: "mapped" }
+  }
+
+  const { blockType, field } = parseReviewSlot(slot)
+  const block = mergedTemplate.blocks.find((entry) => entry.type === blockType)
+  if (!block) return null
+
+  const def = resolveReviewFieldDef(blockType, field)
+  if (!def) return null
+
+  const resolved = resolveVariableDef(block.type, field, block.content, def)
+  if (!resolved) return null
+
+  const value = readReviewFieldValue(block, field) ?? ""
+  const mappedValue = role === "mapped" ? value : ""
+  const pdfExcerpt = resolvePdfExcerptForReviewSlot(
+    slot,
+    mappings,
+    mergedTemplate,
+    fullText,
+  )
+
+  return {
+    id:
+      role === "unmapped"
+        ? `unmapped:${block.id}:${field}`
+        : `${block.id}:${field}:${resolved.key}`,
+    blockId: block.id,
+    blockType: block.type,
+    blockLabel: BLOCK_TYPE_LABELS[block.type],
+    field,
+    variableKey: resolved.key,
+    variableLabel: resolved.label,
+    category: resolved.category,
+    pdfExcerpt,
+    mappedValue,
+    status: role,
+    feedback: null,
+    source: "ai",
+  }
+}
+
+function demoteToUnmapped(mapping: PdfFieldMapping): PdfFieldMapping {
+  const pdfExcerpt =
+    mapping.pdfExcerpt.trim() ||
+    mapping.mappedValue.trim()
+
+  return {
+    ...mapping,
+    status: "unmapped",
+    pdfExcerpt,
+    mappedValue: "",
+    feedback: null,
+    source: "ai",
+  }
+}
+
+/** Always returns exactly 10 review rows: 9 mapped + 1 needing user input. */
+export function curatePdfFieldMappingsForReview(
+  mappings: PdfFieldMapping[],
+  mergedTemplate: BuilderTemplate,
+  fullText = "",
+): PdfFieldMapping[] {
+  if (mappings.length === 0) return mappings
+
+  const slot = (mapping: PdfFieldMapping) =>
+    mappingSlotKey({ blockType: mapping.blockType, field: mapping.field })
+  const bySlot = new Map(mappings.map((mapping) => [slot(mapping), mapping]))
+  const reviewSlotPlan = buildReviewSlotPlan(mappings)
+
+  const curated: PdfFieldMapping[] = []
+
+  for (const plan of reviewSlotPlan) {
+    const existing = bySlot.get(plan.slot)
+    const entry = synthesizeReviewMapping(
+      mergedTemplate,
+      plan.slot,
+      plan.role,
+      { source: existing, mappings, fullText },
+    )
+    if (entry) curated.push(entry)
+  }
+
+  if (curated.length >= REVIEW_MAPPING_TOTAL) {
+    return curated.slice(0, REVIEW_MAPPING_TOTAL)
+  }
+
+  const usedSlots = new Set(curated.map(slot))
+  const fallbackMapped = mappings
+    .filter(
+      (mapping) =>
+        mapping.status === "mapped" && !usedSlots.has(slot(mapping)),
+    )
+    .slice(0, REVIEW_MAPPED_TARGET - curated.filter((m) => m.status === "mapped").length)
+
+  const withFallback = [...curated, ...fallbackMapped]
+
+  while (
+    withFallback.filter((mapping) => mapping.status === "mapped").length <
+    REVIEW_MAPPED_TARGET
+  ) {
+    const nextSlot = MAPPED_REVIEW_SLOTS.find(
+      (candidate) =>
+        !withFallback.some((mapping) => slot(mapping) === candidate),
+    )
+    if (!nextSlot) break
+    const entry = synthesizeReviewMapping(
+      mergedTemplate,
+      nextSlot,
+      "mapped",
+      { mappings, fullText },
+    )
+    if (!entry) break
+    withFallback.push(entry)
+  }
+
+  while (
+    withFallback.filter((mapping) => mapping.status === "unmapped").length <
+    REVIEW_UNMAPPED_TARGET
+  ) {
+    const existingMapped = [...withFallback]
+      .reverse()
+      .find(
+        (mapping) => mapping.status === "mapped" && mappingPdfText(mapping),
+      )
+    if (!existingMapped) break
+    withFallback.splice(
+      withFallback.indexOf(existingMapped),
+      1,
+      demoteToUnmapped(existingMapped),
+    )
+  }
+
+  const mapped = withFallback.filter((mapping) => mapping.status === "mapped").slice(0, REVIEW_MAPPED_TARGET)
+  const unmapped = withFallback
+    .filter((mapping) => mapping.status === "unmapped")
+    .slice(0, REVIEW_UNMAPPED_TARGET)
+
+  return [...mapped, ...unmapped].slice(0, REVIEW_MAPPING_TOTAL)
 }
 
 /** AI-mapped fields plus template variables the AI could not match to PDF text. */
@@ -343,10 +920,18 @@ export function buildCompletePdfFieldMappings(
   const mapped = derivePdfFieldMappings(extractedTemplate, fullText).map(
     normalizePdfFieldMapping,
   )
-  const mappedSlots = new Set(mapped.map((mapping) => mappingSlotKey(mapping)))
-  const unmapped = buildUnmappedMappings(mergedTemplate, mappedSlots)
+  const mappedSlots = new Set(
+    mapped.map((mapping) =>
+      mappingSlotKey({ blockType: mapping.blockType, field: mapping.field }),
+    ),
+  )
+  const unmapped = buildUnmappedMappings(
+    extractedTemplate,
+    mergedTemplate,
+    mappedSlots,
+  )
 
-  return [...mapped, ...unmapped].sort((a, b) => {
+  const complete = [...mapped, ...unmapped].sort((a, b) => {
     if (a.status !== b.status) {
       return a.status === "mapped" ? -1 : 1
     }
@@ -356,6 +941,8 @@ export function buildCompletePdfFieldMappings(
     if (blockOrder !== 0) return blockOrder
     return a.variableLabel.localeCompare(b.variableLabel)
   })
+
+  return curatePdfFieldMappingsForReview(complete, mergedTemplate, fullText)
 }
 
 export function applyFieldValueToContent(
@@ -415,8 +1002,18 @@ export function resolveMappingVariableId(
   template: BuilderTemplate,
   mapping: PdfFieldMapping,
 ): string {
+  if (mapping.status === "unmapped" && mapping.source === "ai") {
+    return ""
+  }
+
   if (mapping.id.startsWith("unmapped:")) {
-    return mapping.id.slice("unmapped:".length)
+    const match = getMappableVariables(template).find(
+      (variable) =>
+        variable.blockId === mapping.blockId &&
+        variable.field === mapping.field &&
+        variable.key === mapping.variableKey,
+    )
+    return match?.id ?? `${mapping.blockId}:${mapping.field}`
   }
 
   const match = getMappableVariables(template).find(
@@ -428,15 +1025,81 @@ export function resolveMappingVariableId(
   return match?.id ?? ""
 }
 
+export function mappingNeedsUserInput(mapping: PdfFieldMapping): boolean {
+  return mapping.status === "unmapped" || mapping.feedback === "down"
+}
+
+export function ensurePdfFieldMappingsReviewSet(
+  mappings: PdfFieldMapping[],
+  template: BuilderTemplate,
+): PdfFieldMapping[] {
+  if (mappings.length === 0) return mappings
+  return curatePdfFieldMappingsForReview(mappings, template)
+}
+
+export function summarizeMappingCoverage(mappings: PdfFieldMapping[]): {
+  total: number
+  mapped: number
+  aiMapped: number
+  userMapped: number
+  needsUserInput: number
+  mappedPercent: number
+  /** When true, show "N/N mapped" instead of "N/N mapped by AI". */
+  showFullyMappedLabel: boolean
+} {
+  if (mappings.length === 0) {
+    return {
+      total: 0,
+      mapped: 0,
+      aiMapped: 0,
+      userMapped: 0,
+      needsUserInput: 0,
+      mappedPercent: 0,
+      showFullyMappedLabel: false,
+    }
+  }
+
+  const total = PDF_MAPPING_REVIEW_TOTAL
+  const reviewMappings = mappings.slice(0, total)
+  const needsUserInput = reviewMappings.filter(mappingNeedsUserInput).length
+  const mapped = total - needsUserInput
+  const userMapped = reviewMappings.filter(
+    (mapping) => !mappingNeedsUserInput(mapping) && mapping.source === "user",
+  ).length
+  const aiMapped = mapped - userMapped
+  const mappedPercent = Math.round((mapped / total) * 100)
+  const showFullyMappedLabel = needsUserInput === 0 && userMapped > 0
+
+  return {
+    total,
+    mapped,
+    aiMapped,
+    userMapped,
+    needsUserInput,
+    mappedPercent,
+    showFullyMappedLabel,
+  }
+}
+
+export function sortMappingsForReview(mappings: PdfFieldMapping[]): PdfFieldMapping[] {
+  return [...mappings].sort((a, b) => {
+    const aNeeds = mappingNeedsUserInput(a)
+    const bNeeds = mappingNeedsUserInput(b)
+    if (aNeeds !== bNeeds) return aNeeds ? -1 : 1
+    return a.variableLabel.localeCompare(b.variableLabel)
+  })
+}
+
 export function countReviewedMappings(mappings: PdfFieldMapping[]): {
   reviewed: number
   total: number
   mapped: number
   unmapped: number
 } {
-  const mapped = mappings.filter((m) => m.status === "mapped")
-  const unmapped = mappings.filter((m) => m.status === "unmapped")
-  const reviewed = mappings.filter(
+  const reviewMappings = mappings.slice(0, PDF_MAPPING_REVIEW_TOTAL)
+  const mapped = reviewMappings.filter((m) => m.status === "mapped")
+  const unmapped = reviewMappings.filter((m) => m.status === "unmapped")
+  const reviewed = reviewMappings.filter(
     (m) =>
       m.feedback === "up" ||
       (m.status === "mapped" && m.mappedValue.trim() && m.source === "user") ||
@@ -445,7 +1108,7 @@ export function countReviewedMappings(mappings: PdfFieldMapping[]): {
 
   return {
     reviewed,
-    total: mappings.length,
+    total: mappings.length > 0 ? PDF_MAPPING_REVIEW_TOTAL : 0,
     mapped: mapped.length,
     unmapped: unmapped.length,
   }

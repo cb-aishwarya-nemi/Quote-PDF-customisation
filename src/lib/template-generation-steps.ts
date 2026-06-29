@@ -1,5 +1,6 @@
 import { mockBusinessProfile } from "@/mock/data"
 import type { PdfExtractionSummary } from "@/lib/pdf-template-extractor"
+import { summarizeMappingCoverage } from "@/lib/pdf-field-mappings"
 import { BLOCK_TYPE_LABELS } from "@/lib/derive-template-variables"
 import type { BuilderBlockType, ChatMessage } from "@/types/prompt-builder"
 
@@ -59,14 +60,13 @@ export function makePdfVariableMappingMessage(
 ): ChatMessage | null {
   if (!summary.fieldMappings.length) return null
 
-  const mapped = summary.fieldMappings.filter((m) => m.status !== "unmapped").length
-  const unmapped = summary.fieldMappings.filter((m) => m.status === "unmapped").length
+  const coverage = summarizeMappingCoverage(summary.fieldMappings)
 
   return {
     id: "pdf-variable-mapping",
     role: "assistant",
     kind: "pdf_variable_mapping",
-    content: `Mapped ${mapped} field${mapped === 1 ? "" : "s"} from your PDF${unmapped > 0 ? ` — ${unmapped} still need your input` : ""}. Review them in the Data mapping tab: confirm with 👍, correct with 👎, and fill in anything I missed.`,
+    content: `Mapped ${coverage.aiMapped}/${coverage.total} fields from your PDF${coverage.needsUserInput > 0 ? ` — ${coverage.needsUserInput}/${coverage.total} still need your input` : ""}. Review them in the Data mapping tab: confirm with 👍, correct with 👎, and fill in anything I missed.`,
     timestamp: new Date().toISOString(),
   }
 }
