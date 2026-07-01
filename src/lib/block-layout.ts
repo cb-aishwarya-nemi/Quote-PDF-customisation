@@ -47,6 +47,39 @@ export function canAddBesideBlock(
   return blockAllowsHalfWidth(block.type)
 }
 
+export function canAddBesideLeftBlock(
+  block: BuilderBlock,
+  prevBlock: BuilderBlock | undefined,
+  nextBlock?: BuilderBlock,
+): boolean {
+  if (blockRequiresFullWidth(block.type)) return false
+  if (!blockAllowsHalfWidth(block.type)) return false
+
+  const column = getLayoutColumn(block.content)
+
+  if (column === "full") {
+    return true
+  }
+
+  if (
+    column === "right" &&
+    prevBlock &&
+    blocksAreActivePair(prevBlock, block)
+  ) {
+    return false
+  }
+
+  if (
+    column === "left" &&
+    nextBlock &&
+    blocksAreActivePair(block, nextBlock)
+  ) {
+    return false
+  }
+
+  return true
+}
+
 /** Standalone half blocks keep their column; orphan right slots without a pair reset to left. */
 export function reconcileOrphanHalfColumns(blocks: BuilderBlock[]): BuilderBlock[] {
   return blocks.map((block, index) => {

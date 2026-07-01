@@ -68,7 +68,7 @@ function BlockMenuSection({
 
 type Props = {
   onAdd: (type: BuilderBlockType, options?: AddBlockOptions) => void
-  align?: "center" | "right"
+  align?: "center" | "right" | "left"
   allowedTypes?: BuilderBlockType[]
   children: (openMenu: (e: ReactMouseEvent<HTMLButtonElement>) => void) => ReactNode
 }
@@ -98,7 +98,9 @@ export function AddBlockMenu({ onAdd, align = "center", allowedTypes, children }
       left:
         align === "right"
           ? rect.right
-          : rect.left + rect.width / 2,
+          : align === "left"
+            ? rect.left
+            : rect.left + rect.width / 2,
     })
   }, [align])
 
@@ -150,8 +152,12 @@ export function AddBlockMenu({ onAdd, align = "center", allowedTypes, children }
     createPortal(
       <div
         ref={menuRef}
-        className={`fixed z-[200] w-[280px] rounded-xl border border-gray-200 bg-white p-3 shadow-lg ${
-          align === "right" ? "-translate-x-full" : "-translate-x-1/2"
+        className={`fixed z-[200] max-h-[min(70vh,420px)] w-[280px] overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 shadow-lg ${
+          align === "right"
+            ? "-translate-x-full"
+            : align === "left"
+              ? ""
+              : "-translate-x-1/2"
         }`}
         style={{ top: menuPos.top, left: menuPos.left }}
         onMouseDown={(e) => e.stopPropagation()}

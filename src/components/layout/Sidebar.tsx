@@ -2,6 +2,7 @@ import {
   BarChart3,
   Box,
   ChevronDown,
+  ClipboardList,
   Command,
   Database,
   Ellipsis,
@@ -25,10 +26,12 @@ type NavItem = {
   icon: LucideIcon
   badge?: string
   showChevron?: boolean
+  href?: string
   children?: { label: string; href?: string }[]
 }
 
 const navItems: NavItem[] = [
+  { label: "Quotes", icon: ClipboardList, showChevron: true, href: "/quotes" },
   { label: "Product Catalog", icon: Box, showChevron: true },
   { label: "Usages", icon: Zap, badge: "NEW", showChevron: true },
   { label: "Entitlements", icon: Shield, showChevron: true },
@@ -200,6 +203,15 @@ export function Sidebar() {
                 icon={item.icon}
                 badge={item.badge}
                 showChevron={item.showChevron}
+                active={
+                  item.href
+                    ? item.href === "/"
+                      ? location.pathname === "/"
+                      : location.pathname === item.href ||
+                        location.pathname.startsWith(`${item.href}/`)
+                    : false
+                }
+                onClick={item.href ? () => navigate(item.href!) : undefined}
               />
             )}
           </div>

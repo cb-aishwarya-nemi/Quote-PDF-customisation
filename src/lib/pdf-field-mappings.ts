@@ -1090,6 +1090,53 @@ export function sortMappingsForReview(mappings: PdfFieldMapping[]): PdfFieldMapp
   })
 }
 
+export type PdfFieldMappingSection = {
+  id: string
+  label: string
+  mappings: PdfFieldMapping[]
+  needsUserInput: number
+}
+
+/** Group review mappings by canvas block, in template order. */
+export function groupMappingsForReview(
+  template: BuilderTemplate,
+  mappings: PdfFieldMapping[],
+): PdfFieldMappingSection[] {
+  const blockOrder = new Map(
+    template.blocks.map((block, index) => [block.id, index]),
+  )
+  const byBlock = new Map<string, PdfFieldMapping[]>()
+
+  for (const mapping of mappings) {
+    const list = byBlock.get(mapping.blockId) ?? []
+    list.push(mapping)
+    byBlock.set(mapping.blockId, list)
+  }
+
+  return [...byBlock.entries()]
+    .sort(
+      ([blockIdA], [blockIdB]) =>
+        (blockOrder.get(blockIdA) ?? 999) - (blockOrder.get(blockIdB) ?? 999),
+    )
+    .map(([blockId, blockMappings]) => {
+      const sorted = [...blockMappings].sort((a, b) => {
+        const aNeeds = mappingNeedsUserInput(a)
+        const bNeeds = mappingNeedsUserInput(b)
+        if (aNeeds !== bNeeds) return aNeeds ? -1 : 1
+        return a.variableLabel.localeCompare(b.variableLabel)
+      })
+
+      return {
+        id: blockId,
+        label: sorted[0]?.blockLabel ?? "Fields",
+        mappings: sorted,
+        needsUserInput: sorted.filter((mapping) =>
+          mappingNeedsUserInput(mapping),
+        ).length,
+      }
+    })
+}
+
 export function countReviewedMappings(mappings: PdfFieldMapping[]): {
   reviewed: number
   total: number

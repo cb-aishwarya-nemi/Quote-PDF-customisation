@@ -1,9 +1,11 @@
+import type { QuotePdfPreviewContext } from "@/data/create-quote-form"
+
 export type PreviewTemplate = {
   name: string
   steps?: string[]
 }
 
-const lineItems = [
+const defaultLineItems = [
   { name: "Enterprise Platform — Annual", qty: 1, unit: "$48,000", total: "$48,000" },
   { name: "Premium Support", qty: 1, unit: "$12,000", total: "$12,000" },
   { name: "Implementation services", qty: 1, unit: "$8,500", total: "$8,500" },
@@ -11,9 +13,17 @@ const lineItems = [
 
 type Props = {
   template: PreviewTemplate
+  context?: QuotePdfPreviewContext
 }
 
-export function QuotePdfPreviewDocument({ template }: Props) {
+export function QuotePdfPreviewDocument({ template, context }: Props) {
+  const lineItems = context
+    ? context.lineItems
+    : defaultLineItems
+  const subtotal = context?.subtotal ?? "$68,500"
+  const totalContractValue = context?.totalContractValue ?? "$223,000"
+  const showTcv = context ? true : template.steps?.some((s) => s.toLowerCase().includes("tcv"))
+
   return (
     <div className="mx-auto w-full max-w-[640px] bg-white px-10 py-12 shadow-lg ring-1 ring-black/5">
       <div className="flex items-start justify-between border-b border-gray-200 pb-6">
@@ -32,9 +42,15 @@ export function QuotePdfPreviewDocument({ template }: Props) {
         </div>
         <div className="text-right">
           <h1 className="text-[22px] font-semibold text-gray-900">Quote</h1>
-          <p className="mt-2 text-[12px] text-gray-600">Quote #QT-2026-0142</p>
-          <p className="text-[12px] text-gray-600">Date: Jun 12, 2026</p>
-          <p className="text-[12px] text-gray-600">Valid until: Jul 12, 2026</p>
+          <p className="mt-2 text-[12px] text-gray-600">
+            Quote #{context?.quoteNumber ?? "QT-2026-0142"}
+          </p>
+          <p className="text-[12px] text-gray-600">
+            Date: {context?.quoteDate ?? "Jun 12, 2026"}
+          </p>
+          <p className="text-[12px] text-gray-600">
+            Valid until: {context?.validUntil ?? "Jul 12, 2026"}
+          </p>
         </div>
       </div>
 
@@ -43,13 +59,21 @@ export function QuotePdfPreviewDocument({ template }: Props) {
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
             Billed to
           </p>
-          <p className="mt-2 text-[13px] font-medium text-gray-900">Acme Corporation</p>
+          <p className="mt-2 text-[13px] font-medium text-gray-900">
+            {context?.customerCompany ?? "Acme Corporation"}
+          </p>
           <p className="text-[12px] text-gray-600">
-            100 Market Street
+            {context?.contactName ?? "Acme Corporation"}
             <br />
-            San Francisco, CA 94105
-            <br />
-            United States
+            {context?.billingAddress ?? (
+              <>
+                100 Market Street
+                <br />
+                San Francisco, CA 94105
+                <br />
+                United States
+              </>
+            )}
           </p>
         </div>
         <div>
@@ -93,26 +117,34 @@ export function QuotePdfPreviewDocument({ template }: Props) {
         <div className="w-48 space-y-1 text-[12px]">
           <div className="flex justify-between text-gray-600">
             <span>Subtotal</span>
-            <span>$68,500</span>
+            <span>{subtotal}</span>
           </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Tax (8.5%)</span>
-            <span>$5,822</span>
-          </div>
+          {!context && (
+            <div className="flex justify-between text-gray-600">
+              <span>Tax (8.5%)</span>
+              <span>$5,822</span>
+            </div>
+          )}
           <div className="flex justify-between border-t border-gray-200 pt-2 font-semibold text-gray-900">
             <span>Total</span>
-            <span>$74,322</span>
+            <span>{context ? subtotal : "$74,322"}</span>
           </div>
         </div>
       </div>
 
-      {template.steps?.some((s) => s.toLowerCase().includes("tcv")) && (
+      {showTcv && (
         <div className="mt-8 rounded border border-gray-200 bg-gray-50 px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
             Total contract value
           </p>
-          <p className="mt-1 text-[18px] font-semibold text-gray-900">$223,000</p>
-          <p className="text-[11px] text-gray-500">36-month term · Billed annually</p>
+          <p className="mt-1 text-[18px] font-semibold text-gray-900">
+            {totalContractValue}
+          </p>
+          <p className="text-[11px] text-gray-500">
+            {context
+              ? "24-month term · Billed yearly"
+              : "36-month term · Billed annually"}
+          </p>
         </div>
       )}
 
@@ -129,7 +161,7 @@ export function QuotePdfPreviewDocument({ template }: Props) {
       </div>
 
       <p className="mt-8 text-center text-[10px] text-gray-400">
-        Preview — {template.name}
+        Preview — {context?.quoteName ?? template.name}
       </p>
     </div>
   )

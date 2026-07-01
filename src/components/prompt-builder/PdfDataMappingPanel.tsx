@@ -1,11 +1,10 @@
 import { PdfFieldMappingTable } from "@/components/prompt-builder/PdfFieldMappingTable"
 import { useBuilderScrollContainerRef } from "@/components/prompt-builder/builder-scroll-container"
 import { usePromptBuilderStore } from "@/store/prompt-builder-store"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, ExternalLink } from "lucide-react"
 
 export function PdfDataMappingPanel() {
   const mappings = usePromptBuilderStore((s) => s.pdfFieldMappings)
-  const sourceFileName = usePromptBuilderStore((s) => s.pdfSourceFileName)
   const sourcePdfDataUrl = usePromptBuilderStore((s) => s.pdfSourceDataUrl)
   const setSelectedBlockId = usePromptBuilderStore((s) => s.setSelectedBlockId)
   const setBuilderWorkflowTab = usePromptBuilderStore((s) => s.setBuilderWorkflowTab)
@@ -22,26 +21,20 @@ export function PdfDataMappingPanel() {
       className="min-h-0 min-w-0 flex-1 overflow-y-auto"
     >
       <div className="mx-auto flex max-w-4xl flex-col gap-6 px-6 pb-8 pt-6">
-        <div className="space-y-2">
+        <div className="flex items-center justify-between gap-4">
           <h1 className="text-[22px] font-semibold text-gray-900">
             Review data mapped from your PDF
           </h1>
-          {sourceFileName && (
-            <p className="text-[12px] text-gray-500">
-              Source file:{" "}
-              {sourcePdfDataUrl ? (
-                <a
-                  href={sourcePdfDataUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  {sourceFileName}
-                </a>
-              ) : (
-                sourceFileName
-              )}
-            </p>
+          {sourcePdfDataUrl && (
+            <a
+              href={sourcePdfDataUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-blue-600 hover:text-blue-700"
+            >
+              View PDF
+              <ExternalLink className="size-3.5 shrink-0" />
+            </a>
           )}
         </div>
 

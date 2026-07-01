@@ -1,4 +1,5 @@
 import { AddComponentMenu } from "@/components/prompt-builder/AddComponentMenu"
+import { LogoBlockControls } from "@/components/prompt-builder/LogoBlockControls"
 import { blockShowsAddComponent } from "@/lib/fragment-blocks"
 import { BlockBackgroundControls } from "@/components/prompt-builder/BlockBackgroundControls"
 import { BlockBackgroundShell } from "@/components/prompt-builder/BlockBackgroundShell"
@@ -57,6 +58,9 @@ export function BlockChrome({
   const variantLabel = getVariantLabel(block.type, variantId)
   const hasVariants = BLOCK_VARIANTS[block.type].length > 1
   const displayCondition = (block.content.displayCondition ??
+    (block.type === "company_logo"
+      ? block.content.logoDisplayCondition
+      : undefined) ??
     null) as BlockDisplayCondition
   const hasCondition = hasConditions(displayCondition)
   const conditionSummary = describeConditionRulesShort(displayCondition)
@@ -68,7 +72,9 @@ export function BlockChrome({
   const blockContent = hasBg ? (
     <BlockBackgroundShell block={block}>{children}</BlockBackgroundShell>
   ) : (
-    <div className="p-5">{children}</div>
+    <div className={block.type === "company_logo" ? "px-5 py-3" : "p-5"}>
+      {children}
+    </div>
   )
 
   useEffect(() => {
@@ -84,56 +90,7 @@ export function BlockChrome({
   }, [conditionOpen, variantOpen])
 
   const showAdminControls = canEditStructure
-
-  if (block.type === "company_logo") {
-    return (
-      <div className={`group/block relative ${isDragging ? "opacity-95" : ""}`}>
-        {showAdminControls && dragHandleProps && (
-          <button
-            type="button"
-            className="absolute left-0 top-3 flex w-5 -translate-x-full cursor-grab items-center justify-center pr-1 text-gray-300 opacity-0 transition-opacity hover:text-gray-500 group-hover/block:opacity-100 active:cursor-grabbing"
-            aria-label="Drag to reorder"
-            onClick={(e) => e.stopPropagation()}
-            {...dragHandleProps}
-          >
-            <GripVertical className="size-4" />
-          </button>
-        )}
-
-        <div
-          className="relative min-w-0 cursor-default"
-          onClick={() => setSelectedBlockId(block.id)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") setSelectedBlockId(block.id)
-          }}
-          role="button"
-          tabIndex={0}
-        >
-          {showAdminControls && (
-            <div className="pointer-events-none absolute right-2 top-2 z-20 opacity-0 transition-opacity group-hover/block:opacity-100 group-focus-within/block:opacity-100">
-              <div className="pointer-events-auto">
-                <BlockBackgroundControls block={block} />
-              </div>
-            </div>
-          )}
-          {blockContent}
-
-          {showAddComponent && blockSupportsFragments(block.type) && (
-            <div
-              className="border-t border-gray-100 px-5 py-2.5"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <AddComponentMenu
-                variablePickerOptions={fragmentActions.variablePickerOptions}
-                onAddText={fragmentActions.addText}
-                onAddVariable={fragmentActions.addVariable}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
+  const isLogoBlock = block.type === "company_logo"
 
   const shellClasses = (() => {
     const base = `relative min-w-0 rounded-xl border transition-all ${
@@ -171,7 +128,7 @@ export function BlockChrome({
 
       <div
         ref={menuRef}
-        className={`${shellClasses} cursor-default`}
+        className={`${shellClasses} min-w-0 max-w-full overflow-x-clip cursor-default`}
         onClick={() => setSelectedBlockId(block.id)}
         onKeyDown={(e) => {
           if (e.key === "Enter") setSelectedBlockId(block.id)
@@ -187,10 +144,13 @@ export function BlockChrome({
                 : "opacity-0 group-hover/block:opacity-100 group-focus-within/block:opacity-100"
             }`}
           >
-            <div className="pointer-events-auto">
-              <BlockWidthControl block={block} />
-            </div>
-            {hasVariants && (
+            {!isLogoBlock && (
+              <div className="pointer-events-auto">
+                <BlockWidthControl block={block} />
+              </div>
+            )}
+            {isLogoBlock && <LogoBlockControls block={block} />}
+            {!isLogoBlock && hasVariants && (
               <div className="relative pointer-events-auto">
                 <button
                   type="button"
@@ -221,97 +181,103 @@ export function BlockChrome({
               </div>
             )}
 
-            <div className="group/condition relative pointer-events-auto">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setConditionOpen((v) => !v)
-                  setVariantOpen(false)
-                }}
-                className={`rounded-md border p-1 shadow-sm ${
-                  hasCondition
-                    ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100/80"
-                    : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                }`}
-                aria-label={hasCondition ? "Condition set" : "Add condition"}
-              >
-                <Filter className="size-3.5" />
-              </button>
-              <span
-                role="tooltip"
-                className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden w-max max-w-[240px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium leading-snug text-slate-700 shadow-md group-hover/condition:block"
-              >
-                {hasCondition
-                  ? `Shows when ${conditionSummary}`
-                  : "Add condition"}
-              </span>
-              {conditionOpen && (
-                <div className="pointer-events-auto absolute right-0 top-full z-30 mt-1">
-                  <ConditionBuilderPanel
-                    title="Show block"
-                    rules={displayCondition}
-                    onChange={(condition) => {
-                      setBlockDisplayCondition(block.id, condition)
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            {!isLogoBlock && (
+              <div className="group/condition relative pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setConditionOpen((v) => !v)
+                    setVariantOpen(false)
+                  }}
+                  className={`rounded-md border p-1 shadow-sm ${
+                    hasCondition
+                      ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100/80"
+                      : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  }`}
+                  aria-label={hasCondition ? "Condition set" : "Add condition"}
+                >
+                  <Filter className="size-3.5" />
+                </button>
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden w-max max-w-[240px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium leading-snug text-slate-700 shadow-md group-hover/condition:block"
+                >
+                  {hasCondition
+                    ? `Shows when ${conditionSummary}`
+                    : "Add condition"}
+                </span>
+                {conditionOpen && (
+                  <div className="pointer-events-auto absolute right-0 top-full z-30 mt-1">
+                    <ConditionBuilderPanel
+                      title="Show block"
+                      rules={displayCondition}
+                      onChange={(condition) => {
+                        setBlockDisplayCondition(block.id, condition)
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="pointer-events-auto">
               <BlockBackgroundControls block={block} />
             </div>
 
-            <div className="group/lock relative pointer-events-auto">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setBlockLocked(block.id, !isLocked)
-                }}
-                className={`rounded-md border p-1 shadow-sm ${
-                  isLocked
-                    ? "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                }`}
-                aria-label={isLocked ? "Unlock block" : "Lock block"}
-              >
-                {isLocked ? (
-                  <Lock className="size-3.5" />
-                ) : (
-                  <Unlock className="size-3.5" />
-                )}
-              </button>
-              <span
-                role="tooltip"
-                className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden w-max max-w-[240px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium leading-snug text-slate-700 shadow-md group-hover/lock:block"
-              >
-                {isLocked
-                  ? "Locked for Sales at quote creation"
-                  : "Lock — Sales cannot edit at quote creation"}
-              </span>
-            </div>
+            {!isLogoBlock && (
+              <>
+                <div className="group/lock relative pointer-events-auto">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setBlockLocked(block.id, !isLocked)
+                    }}
+                    className={`rounded-md border p-1 shadow-sm ${
+                      isLocked
+                        ? "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                    }`}
+                    aria-label={isLocked ? "Unlock block" : "Lock block"}
+                  >
+                    {isLocked ? (
+                      <Lock className="size-3.5" />
+                    ) : (
+                      <Unlock className="size-3.5" />
+                    )}
+                  </button>
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden w-max max-w-[240px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium leading-snug text-slate-700 shadow-md group-hover/lock:block"
+                  >
+                    {isLocked
+                      ? "Locked for Sales at quote creation"
+                      : "Lock — Sales cannot edit at quote creation"}
+                  </span>
+                </div>
 
-            <div className="group/delete relative pointer-events-auto">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  removeBlock(block.id)
-                }}
-                className="rounded-md border border-gray-200 bg-white p-1 text-gray-400 shadow-sm hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                aria-label="Delete block"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-              <span
-                role="tooltip"
-                className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden w-max rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 shadow-md group-hover/delete:block"
-              >
-                Delete block
-              </span>
-            </div>
+                <div className="group/delete relative pointer-events-auto">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeBlock(block.id)
+                    }}
+                    className="rounded-md border border-gray-200 bg-white p-1 text-gray-400 shadow-sm hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                    aria-label="Delete block"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden w-max rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 shadow-md group-hover/delete:block"
+                  >
+                    Delete block
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         )}
 

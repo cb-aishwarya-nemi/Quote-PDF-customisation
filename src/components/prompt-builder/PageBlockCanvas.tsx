@@ -1,7 +1,8 @@
 import {
   AddBesideBlockDivider,
-  AddBlockDivider,
+  BlockEdgeRowInsert,
 } from "@/components/prompt-builder/AddBlockDivider"
+import { BlockPairDropOverlay } from "@/components/prompt-builder/BlockPairDropOverlay"
 import { BuilderBlockView } from "@/components/prompt-builder/BuilderBlockView"
 import { BlockBackgroundShell } from "@/components/prompt-builder/BlockBackgroundShell"
 import { BlockChrome } from "@/components/prompt-builder/BlockChrome"
@@ -17,12 +18,16 @@ import { CanvasPageDocumentShell } from "@/components/prompt-builder/CanvasPageD
 import { TemplateDocumentFrame } from "@/components/prompt-builder/TemplateDocumentFrame"
 import { useIsSalesPreview } from "@/hooks/use-builder-editor-mode"
 import {
+  canAcceptRightPartnerDrop,
   columnDropId,
   findColumnDropTarget,
+  parseColumnDropId,
+  rightPairDropIdForBlock,
 } from "@/lib/block-layout-drag"
 import { blockAllowsHalfWidth } from "@/lib/block-layout-rules"
 import {
   canAddBesideBlock,
+  canAddBesideLeftBlock,
   getLayoutColumn,
   groupBlocksForLayout,
   type BlockLayoutRow,
@@ -314,8 +319,17 @@ export function PageBlockCanvas({
       event.over?.id,
       event.collisions?.map((collision) => collision.id),
     )
-    if (columnTarget && event.over?.id != null) {
-      lastColumnDropIdRef.current = String(event.over.id)
+    if (columnTarget) {
+      const collisionIds = [
+        event.over?.id,
+        ...(event.collisions?.map((collision) => collision.id) ?? []),
+      ]
+      for (const id of collisionIds) {
+        if (id != null && parseColumnDropId(id)) {
+          lastColumnDropIdRef.current = String(id)
+          break
+        }
+      }
     }
   }
 
@@ -380,6 +394,22 @@ export function PageBlockCanvas({
     activeDragBlock && blockAllowsHalfWidth(activeDragBlock.type),
   )
 
+  const renderPairDropOverlay = useCallback(
+    (block: BuilderBlock) => {
+      if (!showColumnDrops || !activeDragBlock) return null
+      if (!canAcceptRightPartnerDrop(block, blocks, activeDragBlock.type)) {
+        return null
+      }
+      return (
+        <BlockPairDropOverlay
+          id={rightPairDropIdForBlock(block, blocks)}
+          visible={showColumnDrops}
+        />
+      )
+    },
+    [activeDragBlock, blocks, showColumnDrops],
+  )
+
   const firstRowBlockIds =
     layoutRows.length > 0 ? blockIdsForRow(layoutRows[0]) : []
 
@@ -420,25 +450,10 @@ export function PageBlockCanvas({
     <>
       <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
         {!isSales && (
-          <>
-            <ColumnDropRow
-              insertBeforeBlockId={INSERT_AT_START}
-              visible={showColumnDrops}
-            />
-            <AddBlockDivider
-              pageId={pageId}
-              allowedTypes={allowedBlockTypes}
-              atStart
-              visible={
-                !showColumnDrops &&
-                (layoutRows.length === 0 ||
-                  isInsertRevealed(INSERT_AT_START, firstRowBlockIds))
-              }
-              onInsertHover={(active) =>
-                setHoveredInsertKey(active ? INSERT_AT_START : null)
-              }
-            />
-          </>
+          <ColumnDropRow
+            insertBeforeBlockId={INSERT_AT_START}
+            visible={showColumnDrops}
+          />
         )}
         {layoutRows.map((row, rowIndex) => {
           const currentBlockIds = blockIdsForRow(row)
@@ -451,55 +466,84 @@ export function PageBlockCanvas({
             ? blockIdsForRow(nextRow)[0]
             : INSERT_AT_END
 
+          const insertRevealed = isInsertRevealed(insertAfterId, insertNeighbors)
+          const startRevealed =
+            rowIndex === 0 &&
+            isInsertRevealed(INSERT_AT_START, firstRowBlockIds)
+
           if (row.type === "pair") {
             return (
               <Fragment key={`${row.left.id}-${row.right.id}`}>
-                <BuilderBlockRow>
-                  <SortableBuilderBlock
-                    block={row.left}
-                    {...blockHoverHandlers(row.left.id)}
-                  />
-                  <SortableBuilderBlock
-                    block={row.right}
-                    {...blockHoverHandlers(row.right.id)}
-                  />
-                </BuilderBlockRow>
-                {!isSales && (
-                  <>
-                    <ColumnDropRow
-                      insertBeforeBlockId={insertBeforeNextId}
-                      visible={showColumnDrops}
-                    />
-                    <AddBlockDivider
+                <div className="group/row relative">
+                  <BuilderBlockRow>
+                    <div className="group/row relative min-w-0">
+                      <SortableBuilderBlock
+                        block={row.left}
+                        {...blockHoverHandlers(row.left.id)}
+                      />
+                      {renderPairDropOverlay(row.left)}
+                    </div>
+                    <div className="group/row relative min-w-0">
+                      <SortableBuilderBlock
+                        block={row.right}
+                        {...blockHoverHandlers(row.right.id)}
+                      />
+                      {renderPairDropOverlay(row.right)}
+                    </div>
+                  </BuilderBlockRow>
+                  {!isSales && !showColumnDrops && startRevealed && (
+                    <BlockEdgeRowInsert
+                      side="left"
+                      atStart
                       pageId={pageId}
                       allowedTypes={allowedBlockTypes}
-                      afterId={insertAfterId}
-                      visible={
-                        !showColumnDrops &&
-                        isInsertRevealed(insertAfterId, insertNeighbors)
+                      visible={startRevealed}
+                      onInsertHover={(active) =>
+                        setHoveredInsertKey(active ? INSERT_AT_START : null)
                       }
+                    />
+                  )}
+                  {!isSales && !showColumnDrops && insertRevealed && (
+                    <BlockEdgeRowInsert
+                      side="right"
+                      afterId={insertAfterId}
+                      pageId={pageId}
+                      allowedTypes={allowedBlockTypes}
+                      visible={insertRevealed}
                       onInsertHover={(active) =>
                         setHoveredInsertKey(active ? insertAfterId : null)
                       }
                     />
-                  </>
+                  )}
+                </div>
+                {!isSales && (
+                  <ColumnDropRow
+                    insertBeforeBlockId={insertBeforeNextId}
+                    visible={showColumnDrops}
+                  />
                 )}
               </Fragment>
             )
           }
 
           const blockIndex = blocks.findIndex((entry) => entry.id === row.block.id)
+          const prevBlock = blocks[blockIndex - 1]
           const nextBlock = blocks[blockIndex + 1]
-          const showBesideAdd = !isSales && canAddBesideBlock(row.block, nextBlock)
+          const showBesideAddRight =
+            !isSales && canAddBesideBlock(row.block, nextBlock)
+          const showBesideAddLeft =
+            !isSales && canAddBesideLeftBlock(row.block, prevBlock, nextBlock)
           const layoutColumn = getLayoutColumn(row.block.content)
           const halfColumn = layoutColumn === "left" || layoutColumn === "right"
 
           return (
             <Fragment key={row.block.id}>
               <div
-                className={`group/row relative ${
-                  halfColumn ? "grid grid-cols-2 items-start gap-4" : ""
-                }`}
+                className={
+                  halfColumn
+                    ? "grid grid-cols-2 items-stretch gap-4"
+                    : ""
+                }
               >
                 {layoutColumn === "right" &&
                   (showColumnDrops ? (
@@ -508,55 +552,83 @@ export function PageBlockCanvas({
                       label="Left column"
                     />
                   ) : (
-                    <div aria-hidden />
+                    <div className="min-w-0" aria-hidden />
                   ))}
-                <SortableBuilderBlock
-                  block={row.block}
-                  {...blockHoverHandlers(row.block.id)}
-                />
-                {layoutColumn === "left" &&
-                  (showColumnDrops ? (
-                    <LayoutColumnDropSlot
-                      id={columnDropId("right", `pair:${row.block.id}`)}
-                      label="Right column"
+                <div
+                  className={`group/row relative min-w-0 ${
+                    layoutColumn === "right" ? "col-start-2" : ""
+                  }`}
+                >
+                  <SortableBuilderBlock
+                    block={row.block}
+                    {...blockHoverHandlers(row.block.id)}
+                  />
+                  {renderPairDropOverlay(row.block)}
+                  {!isSales &&
+                    !showColumnDrops &&
+                    startRevealed &&
+                    !showBesideAddLeft && (
+                    <BlockEdgeRowInsert
+                      side="left"
+                      atStart
+                      pageId={pageId}
+                      allowedTypes={allowedBlockTypes}
+                      visible={startRevealed}
+                      onInsertHover={(active) =>
+                        setHoveredInsertKey(active ? INSERT_AT_START : null)
+                      }
                     />
-                  ) : showBesideAdd ? (
+                  )}
+                  {!isSales && !showColumnDrops && showBesideAddLeft && (
                     <AddBesideBlockDivider
                       blockId={row.block.id}
                       pageId={pageId}
                       allowedTypes={allowedBlockTypes}
-                      betweenColumns
+                      side="left"
                     />
+                  )}
+                  {!isSales && !showColumnDrops && showBesideAddRight && (
+                    <AddBesideBlockDivider
+                      blockId={row.block.id}
+                      pageId={pageId}
+                      allowedTypes={allowedBlockTypes}
+                      side="right"
+                    />
+                  )}
+                  {!isSales &&
+                    !showColumnDrops &&
+                    !showBesideAddRight &&
+                    insertRevealed && (
+                      <BlockEdgeRowInsert
+                        side="right"
+                        afterId={insertAfterId}
+                        pageId={pageId}
+                        allowedTypes={allowedBlockTypes}
+                        visible={insertRevealed}
+                        onInsertHover={(active) =>
+                          setHoveredInsertKey(active ? insertAfterId : null)
+                        }
+                      />
+                    )}
+                </div>
+                {layoutColumn === "left" &&
+                  (showColumnDrops ? (
+                    <div className="min-h-0">
+                      <LayoutColumnDropSlot
+                        id={columnDropId("right", `pair:${row.block.id}`)}
+                        label="Right column"
+                        stretch
+                      />
+                    </div>
                   ) : (
                     <div aria-hidden />
                   ))}
-                {showBesideAdd && layoutColumn !== "left" && (
-                  <AddBesideBlockDivider
-                    blockId={row.block.id}
-                    pageId={pageId}
-                    allowedTypes={allowedBlockTypes}
-                  />
-                )}
               </div>
               {!isSales && (
-                <>
-                  <ColumnDropRow
-                    insertBeforeBlockId={insertBeforeNextId}
-                    visible={showColumnDrops}
-                  />
-                  <AddBlockDivider
-                    pageId={pageId}
-                    allowedTypes={allowedBlockTypes}
-                    afterId={insertAfterId}
-                    visible={
-                      !showColumnDrops &&
-                      isInsertRevealed(insertAfterId, insertNeighbors)
-                    }
-                    onInsertHover={(active) =>
-                      setHoveredInsertKey(active ? insertAfterId : null)
-                    }
-                  />
-                </>
+                <ColumnDropRow
+                  insertBeforeBlockId={insertBeforeNextId}
+                  visible={showColumnDrops}
+                />
               )}
             </Fragment>
           )

@@ -69,12 +69,12 @@ import {
   makeGenerationSummaryMessage,
   makePdfVariableMappingMessage,
 } from "@/lib/template-generation-steps"
-import type { PdfFieldMapping } from "@/lib/pdf-field-mappings"
 import {
   applyPdfMappingToTemplate,
   ensurePdfFieldMappingsReviewSet,
   getMappableVariables,
   normalizePdfFieldMapping,
+  type PdfFieldMapping,
 } from "@/lib/pdf-field-mappings"
 import {
   createMappingLearning,
@@ -397,8 +397,10 @@ type PromptBuilderStore = {
   ) => void
   addBlock: (type: BuilderBlockType, afterId?: string, pageId?: string) => void
   addBlockBeside: (blockId: string, type: BuilderBlockType, pageId?: string) => void
+  addBlockBesideLeft: (blockId: string, type: BuilderBlockType, pageId?: string) => void
   addImageBlockFromFile: (file: File, afterId?: string, pageId?: string) => void
   addImageBlockFromFileBeside: (file: File, blockId: string) => void
+  addImageBlockFromFileBesideLeft: (file: File, blockId: string) => void
   clearPendingImagePdfImport: () => void
   setPendingIntroPdfImport: (payload: {
     pageId: string
@@ -1680,6 +1682,47 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
       }
     }),
 
+  addBlockBesideLeft: (blockId, type, pageId) =>
+    set((s) => {
+      if (!s.template || isSalesRestrictedEditor(s.editorMode, s.previewPersona)) return s
+      if (!ADDABLE_BLOCKS.some((entry) => entry.type === type)) return s
+      if (INTRO_ONLY_BLOCK_TYPES.includes(type)) return s
+
+      const targetPageId =
+        pageId ??
+        findBlockPageId(s.template, blockId) ??
+        resolveBlockEditPageId(s.template, s.activePageId)
+      const allowed = getAddableBlockTypesForPage(s.template, targetPageId)
+      if (!allowed.includes(type)) return s
+
+      const blocks = [...getBlocksForPage(s.template, targetPageId)]
+      const index = blocks.findIndex((b) => b.id === blockId)
+      if (index < 0) return s
+
+      const anchor = blocks[index]
+      const prev = blocks[index - 1]
+      if (prev && blocksAreActivePair(prev, anchor)) return s
+
+      const leftStub = {
+        type,
+        content: { layoutColumn: "left" },
+      } as unknown as BuilderBlock
+      if (!canBlocksFormPair(leftStub, anchor.type)) return s
+
+      const newBlock = setBlockLayoutColumn(
+        createStandaloneBuilderBlock(type, blocks.length),
+        "left",
+      )
+      blocks[index] = setBlockLayoutColumn(anchor, "right")
+      blocks.splice(index, 0, newBlock)
+
+      return {
+        template: setBlocksForPage(s.template, targetPageId, normalizePageBlocks(blocks)),
+        selectedBlockId: newBlock.id,
+        activePageId: targetPageId,
+      }
+    }),
+
   addImageBlockFromFile: (file, afterId, pageId) => {
     get().addBlock("custom_image", afterId, pageId)
     const blockId = get().selectedBlockId
@@ -1725,6 +1768,49 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
 
   addImageBlockFromFileBeside: (file, blockId) => {
     get().addBlockBeside(blockId, "custom_image")
+    const selectedId = get().selectedBlockId
+    if (!selectedId) return
+
+    void (async () => {
+      try {
+        if (isImageFile(file)) {
+          const previewUrl = await readFileAsDataUrl(file)
+          get().updateBlockContent(selectedId, {
+            fileName: file.name,
+            mediaType: "image",
+            previewUrl,
+            placeholder: false,
+          })
+          return
+        }
+
+        if (isPdfFile(file)) {
+          const prepared = await preparePdfUpload(file)
+          set({
+            pendingImagePdfImport: {
+              blockId: selectedId,
+              fileName: prepared.fileName,
+              pdfDataUrl: prepared.pdfDataUrl,
+              pdfBytes: prepared.pdfBytes,
+              pageCount: prepared.pageCount,
+            },
+          })
+          return
+        }
+
+        get().updateBlockContent(selectedId, {
+          uploadError: "Use a PDF or image (PNG, JPG, GIF, WebP).",
+        })
+      } catch {
+        get().updateBlockContent(selectedId, {
+          uploadError: "Could not load file. Use a PDF or image (PNG, JPG, GIF, WebP).",
+        })
+      }
+    })()
+  },
+
+  addImageBlockFromFileBesideLeft: (file, blockId) => {
+    get().addBlockBesideLeft(blockId, "custom_image")
     const selectedId = get().selectedBlockId
     if (!selectedId) return
 
@@ -1889,6 +1975,10 @@ export const usePromptBuilderStore = create<PromptBuilderStore>((set, get) => ({
   setBlockDisplayCondition: (blockId, condition) => {
     if (get().editorMode !== "edit") return
     get().updateBlockField(blockId, "displayCondition", condition)
+    const block = findTemplateBlock(get().template, blockId)
+    if (block?.type === "company_logo") {
+      get().updateBlockField(blockId, "logoDisplayCondition", condition)
+    }
   },
 
   setBlockLocked: (blockId, locked) => {

@@ -1,8 +1,9 @@
+import { PdfMappingSectionThumbnail } from "@/components/prompt-builder/PdfMappingSectionPreview"
 import { PdfVariablePicker } from "@/components/prompt-builder/PdfVariablePicker"
 import {
+  groupMappingsForReview,
   mappingNeedsUserInput,
   resolveMappingVariableId,
-  sortMappingsForReview,
   summarizeMappingCoverage,
   type PdfFieldMapping,
 } from "@/lib/pdf-field-mappings"
@@ -20,6 +21,8 @@ import {
   ThumbsUp,
 } from "lucide-react"
 import { useEffect, useState } from "react"
+
+const THUMBNAIL_COLUMN_WIDTH_CLASS = "w-[68px]"
 
 function VariablePill({
   category,
@@ -44,10 +47,12 @@ function MappingRow({
   mapping,
   variableId,
   onSelectBlock,
+  showBlockLabel = false,
 }: {
   mapping: PdfFieldMapping
   variableId: string
   onSelectBlock: (blockId: string) => void
+  showBlockLabel?: boolean
 }) {
   const remapPdfFieldMapping = usePromptBuilderStore((s) => s.remapPdfFieldMapping)
   const setPdfMappingFeedback = usePromptBuilderStore((s) => s.setPdfMappingFeedback)
@@ -117,7 +122,9 @@ function MappingRow({
               Not found in PDF
             </p>
           )}
-          <p className="mt-1 text-[11px] text-gray-400">{mapping.blockLabel}</p>
+          {showBlockLabel && (
+            <p className="mt-1 text-[11px] text-gray-400">{mapping.blockLabel}</p>
+          )}
         </button>
 
         <div className="flex min-w-0 items-center gap-3">
@@ -215,6 +222,7 @@ export function PdfFieldMappingTable({
 }) {
   const template = usePromptBuilderStore((s) => s.template)
   const learnings = usePromptBuilderStore((s) => s.pdfMappingLearnings)
+  const pdfSource = usePromptBuilderStore((s) => s.pdfSourceDataUrl)
 
   if (mappings.length === 0) {
     return (
@@ -229,7 +237,7 @@ export function PdfFieldMappingTable({
   if (!template) return null
 
   const coverage = summarizeMappingCoverage(mappings)
-  const sortedMappings = sortMappingsForReview(mappings)
+  const sections = groupMappingsForReview(template, mappings)
 
   const coverageMessage = (() => {
     if (coverage.showFullyMappedLabel) {
@@ -259,31 +267,63 @@ export function PdfFieldMappingTable({
         </div>
       )}
 
-      <div className="flex items-center gap-2.5 rounded-lg bg-blue-50 px-4 py-3">
+      <div className="flex items-center gap-2.5">
         <Sparkles className="size-4 shrink-0 text-blue-600" strokeWidth={2} />
-        <p className="text-[13px] leading-snug text-blue-950/90">{coverageMessage}</p>
+        <p className="text-[13px] leading-snug text-gray-700">{coverageMessage}</p>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-          <span aria-hidden className="w-5" />
-          <span>From PDF</span>
-          <div className="flex items-center gap-3">
-            <span aria-hidden className="size-3.5 shrink-0" />
-            <span>Quote variable</span>
-          </div>
-          <span aria-hidden className="w-[52px]" />
-        </div>
-        <ul className="divide-y divide-gray-100">
-          {sortedMappings.map((mapping) => (
-            <MappingRow
-              key={mapping.id}
-              mapping={mapping}
-              variableId={resolveMappingVariableId(template, mapping)}
-              onSelectBlock={onSelectBlock}
+      <div className="space-y-4">
+        {sections.map((section, sectionIndex) => (
+          <div key={section.id} className="flex items-start gap-5">
+            <section className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3">
+                <h3 className="min-w-0 text-[13px] font-semibold text-gray-900">
+                  {section.label}
+                </h3>
+                <div className="flex shrink-0 items-center gap-2 text-[11px] text-gray-500">
+                  {section.needsUserInput > 0 && (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700 ring-1 ring-amber-100">
+                      {section.needsUserInput} awaiting input
+                    </span>
+                  )}
+                  <span>
+                    {section.mappings.length} field
+                    {section.mappings.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+              </div>
+
+              {sectionIndex === 0 && (
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 border-b border-gray-100 bg-gray-50/60 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                  <span aria-hidden className="w-5" />
+                  <span>From PDF</span>
+                  <div className="flex items-center gap-3">
+                    <span aria-hidden className="size-3.5 shrink-0" />
+                    <span>Quote variable</span>
+                  </div>
+                  <span aria-hidden className="w-[52px]" />
+                </div>
+              )}
+
+              <ul className="divide-y divide-gray-100">
+                {section.mappings.map((mapping) => (
+                  <MappingRow
+                    key={mapping.id}
+                    mapping={mapping}
+                    variableId={resolveMappingVariableId(template, mapping)}
+                    onSelectBlock={onSelectBlock}
+                  />
+                ))}
+              </ul>
+            </section>
+
+            <PdfMappingSectionThumbnail
+              section={section}
+              pdfSource={pdfSource}
+              className={THUMBNAIL_COLUMN_WIDTH_CLASS}
             />
-          ))}
-        </ul>
+          </div>
+        ))}
       </div>
     </div>
   )
